@@ -1,0 +1,11 @@
+.git
+.github
+.ddev
+data/
+vendor/
+deploy/
+docs/
+*.md
+!README.md
+.env
+.env.*

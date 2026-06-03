@@ -1,0 +1,30 @@
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+*.local
+
+# PHP
+vendor/
+data/
+/build/
+/phpunit.xml
+/phpunit.coverage.xml
+
+# DDEV (generated)
+.ddev/.dbimageBuild/
+.ddev/.webimageBuild/
+.ddev/.ddev-docker-compose-*.yaml
+.ddev/traefik/
+
+# Local tools
+__pycache__/
+.venv/
+node_modules/
+dist/
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp

@@ -1,0 +1,29 @@
+{
+    "name": "dakwamine/access-switch",
+    "description": "HTTP access switch for Traefik (forwardAuth + admin API)",
+    "type": "project",
+    "license": "AGPL-3.0-or-later",
+    "require": {
+        "php": "^8.2"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "AccessSwitch\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "AccessSwitch\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit -c phpunit.xml.dist",
+        "test:coverage": "phpunit -c phpunit.coverage.xml.dist"
+    },
+    "config": {
+        "sort-packages": true
+    }
+}
