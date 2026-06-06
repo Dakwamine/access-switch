@@ -3,7 +3,7 @@ name: Publish Docker image
 on:
   push:
     branches: [main, master]
-    tags: ["v*"]
+    tags: ["*.*.*"]
   workflow_dispatch:
 
 env:
@@ -17,7 +17,7 @@ jobs:
 
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: "8.3"
+          php-version: "8.5"
           tools: composer
 
       - run: composer install --no-interaction

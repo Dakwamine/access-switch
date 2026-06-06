@@ -6,7 +6,7 @@ Official image on Docker Hub:
 
 ```text
 dakwamine/access-switch:latest
-dakwamine/access-switch:<version>   # e.g. 1.0.0 on git tag
+dakwamine/access-switch:<version>   # e.g. 1.1.0 on git tag
 ```
 
 ```bash
@@ -65,7 +65,7 @@ GitHub repository secrets:
 Pin a version in production:
 
 ```yaml
-image: dakwamine/access-switch:1.0.0
+image: dakwamine/access-switch:1.1.0
 ```
 
 ## Production security

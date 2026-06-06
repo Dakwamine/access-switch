@@ -1,6 +1,6 @@
 # access-switch service
 
-PHP application for [Traefik ForwardAuth](https://doc.traefik.io/traefik/reference/routing-configuration/http/middlewares/forwardauth/): open or close public access to a site without stopping the app.
+HTTP service to open or close public access to a site without stopping the app. A reverse proxy (or any client) calls `GET /check` before serving traffic: **200** allows the request through, **503** blocks it. [Traefik forwardAuth](https://doc.traefik.io/traefik/reference/routing-configuration/http/middlewares/forwardauth/) is a common integration, but the API is generic HTTP.
 
 ## HTTP endpoints
 
@@ -42,9 +42,12 @@ Copy [`.env.example`](../.env.example) to `.env` for local runs (do not commit).
 public/index.php      # Entry point
 src/                  # Application code (namespace AccessSwitch)
 scripts/test-api.sh   # API smoke tests
+Caddyfile             # FrankenPHP / Caddy (production image)
 Dockerfile
 composer.json
 ```
+
+Production image serves HTTP with **[FrankenPHP](https://frankenphp.dev/)** (Caddy + PHP thread-safe) on port 8080, instead of the single-threaded `php -S` built-in server — useful when many concurrent clients hit `GET /check`. Local CI smoke tests still use `php -S` for a minimal PHP-only setup.
 
 ## Local tests
 

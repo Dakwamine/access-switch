@@ -93,7 +93,7 @@ access-switch:
 
 ## Features
 
-- **Lightweight** — PHP 8.3, Alpine, Pi-friendly (amd64 + arm64)
+- **Lightweight** — PHP 8.5, Alpine, Pi-friendly (amd64 + arm64)
 - **Persistent state** — `/data/state.json` on a volume
 - **Fail-closed** — errors reading state → visitors blocked (503)
 

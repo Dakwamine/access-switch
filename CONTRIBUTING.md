@@ -4,28 +4,14 @@ Thank you for your interest in **access-switch**.
 
 ## Prerequisites
 
-- PHP 8.2+ (8.3 recommended)
+- PHP 8.5+
 - Docker / DDEV (optional)
 
 ## Workflow
 
 1. Fork and branch (`feat/...`, `fix/...`).
 2. Edit code at the repository root (`src/`, `public/`).
-3. Run tests:
-
-   ```bash
-   composer install
-   composer test
-   ```
-
-   Optional API smoke tests:
-
-   ```bash
-   export ACCESS_SWITCH_TOKEN=test STATE_FILE=$PWD/data/state.json
-   mkdir -p data
-   php -S 127.0.0.1:8080 -t public public/index.php &
-   DDEV_PRIMARY_URL=http://127.0.0.1:8080 ACCESS_SWITCH_TOKEN=test ./scripts/test-api.sh
-   ```
+3. Run tests — see [docs/development.md](docs/development.md) (PHPUnit and optional `scripts/test-api.sh`).
 
 4. Open a pull request.
 

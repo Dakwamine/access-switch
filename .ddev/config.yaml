@@ -1,7 +1,7 @@
 name: access-switch
 type: php
 docroot: public
-php_version: "8.3"
+php_version: "8.5"
 webserver_type: nginx-fpm
 omit_containers:
   - db
