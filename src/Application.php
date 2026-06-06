@@ -11,7 +11,8 @@ final class Application
 {
     public function __construct(
         private readonly Config $config,
-        private readonly StateStore $store,
+        private readonly ServiceRegistry $registry,
+        private readonly ServiceStateStore $store,
     ) {
     }
 
@@ -36,8 +37,15 @@ final class Application
 
     private function handleGet(string $path): Response
     {
+        if ($path === '/check') {
+            return $this->check(ServiceRegistry::DEFAULT_SERVICE_ID);
+        }
+
+        if (preg_match('#^/check/([^/]+)$#', $path, $matches) === 1) {
+            return $this->check($matches[1]);
+        }
+
         return match ($path) {
-            '/check' => $this->check(),
             '/health' => Response::json(['status' => 'ok']),
             default => Response::empty(404),
         };
@@ -51,10 +59,14 @@ final class Application
         };
     }
 
-    private function check(): Response
+    private function check(string $serviceId): Response
     {
+        if (!$this->registry->validateServiceId($serviceId) || !$this->registry->isAuthorizedForCheck($serviceId)) {
+            return Response::empty(503);
+        }
+
         try {
-            if ($this->store->isOpen()) {
+            if ($this->store->isOpen($serviceId)) {
                 return Response::empty(200);
             }
         } catch (Throwable) {
@@ -96,8 +108,24 @@ final class Application
             return Response::json(['error' => '"open" must be a boolean'], 400);
         }
 
+        $serviceId = ServiceRegistry::DEFAULT_SERVICE_ID;
+        if (array_key_exists('service', $data)) {
+            if (!is_string($data['service'])) {
+                return Response::json(['error' => '"service" must be a string'], 400);
+            }
+            $serviceId = $data['service'];
+        }
+
+        if (!$this->registry->validateServiceId($serviceId)) {
+            return Response::json(['error' => 'invalid service id'], 400);
+        }
+
+        if (!$this->registry->isAuthorizedForAdmin($serviceId)) {
+            return Response::json(['error' => 'unknown or unauthorized service'], 400);
+        }
+
         try {
-            $this->store->setOpen($data['open']);
+            $this->store->setOpen($serviceId, $data['open']);
         } catch (Throwable $e) {
             return Response::json(
                 ['error' => 'persistence failed', 'detail' => $e->getMessage()],
@@ -106,6 +134,7 @@ final class Application
         }
 
         return Response::json([
+            'service' => $serviceId,
             'open' => $data['open'],
             'updated_at' => gmdate('c'),
         ]);

@@ -1,13 +1,14 @@
 # access-switch service
 
-HTTP service to open or close public access to a site without stopping the app. A reverse proxy (or any client) calls `GET /check` before serving traffic: **200** allows the request through, **503** blocks it. [Traefik forwardAuth](https://doc.traefik.io/traefik/reference/routing-configuration/http/middlewares/forwardauth/) is a common integration, but the API is generic HTTP.
+HTTP service to open or close public access to one or more sites without stopping the apps. A reverse proxy (or any client) calls `GET /check` (or `GET /check/{serviceId}`) before serving traffic: **200** allows the request through, **503** blocks it. [Traefik forwardAuth](https://doc.traefik.io/traefik/reference/routing-configuration/http/middlewares/forwardauth/) is a common integration, but the API is generic HTTP.
 
 ## HTTP endpoints
 
 | Endpoint | Role |
 |----------|------|
-| `GET /check` | Visitor authorization (200 = allow, 503 = deny) |
-| `POST /admin` | ON/OFF toggle (Bearer `ACCESS_SWITCH_TOKEN`) |
+| `GET /check` | Visitor authorization for the **default** service |
+| `GET /check/{serviceId}` | Visitor authorization for a named service |
+| `POST /admin` | ON/OFF toggle per service (Bearer `ACCESS_SWITCH_TOKEN`) |
 | `GET /health` | Healthcheck |
 
 Full reference: [api.md](api.md).
@@ -31,8 +32,15 @@ docker build -t dakwamine/access-switch:local .
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `ACCESS_SWITCH_TOKEN` | — | Admin API secret (required in production) |
-| `STATE_FILE` | `/data/state.json` | Persisted open/closed state |
-| `DEFAULT_OPEN` | `false` | State when the file does not exist |
+| `DEFAULT_OPEN` | `false` | State when the state file does not exist |
+| `AUTHORIZED_SERVICES` | *(empty)* | Optional extra restriction (CSV); when set, only listed ids are allowed |
+
+Fixed paths inside the container (mount a volume on `/data`):
+
+| Path | Role |
+|------|------|
+| `/data/states/{serviceId}.json` | Persisted open/closed state |
+| `/data/services.json` | Optional authorized-services list (writable) |
 
 Copy [`.env.example`](../.env.example) to `.env` for local runs (do not commit).
 

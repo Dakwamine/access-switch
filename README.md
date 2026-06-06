@@ -84,17 +84,21 @@ access-switch:
   image: dakwamine/access-switch:latest
   environment:
     ACCESS_SWITCH_TOKEN: ${ACCESS_SWITCH_TOKEN}
+    AUTHORIZED_SERVICES: "my-app"  # optional; default service always available
     DEFAULT_OPEN: "false"          # start closed if no state file yet
   volumes:
-    - access-switch-state:/data     # persists open/closed across restarts
+    - access-switch-state:/data     # /data/states/{serviceId}.json
   networks:
     - traefik
 ```
 
+Per-app forwardAuth URL example: `http://access-switch:8080/check/my-app` (or `/check` for the default service).
+
 ## Features
 
 - **Lightweight** — PHP 8.5, Alpine, Pi-friendly (amd64 + arm64)
-- **Persistent state** — `/data/state.json` on a volume
+- **Multi-service** — independent open/closed state per service id
+- **Persistent state** — `/data/states/{serviceId}.json` on a volume
 - **Fail-closed** — errors reading state → visitors blocked (503)
 
 ## Documentation

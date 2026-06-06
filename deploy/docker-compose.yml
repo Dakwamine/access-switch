@@ -1,4 +1,4 @@
-# access-switch + application behind Traefik forwardAuth.
+# access-switch + applications behind Traefik forwardAuth.
 # Pull image: docker pull dakwamine/access-switch:latest
 #
 # Set ACCESS_SWITCH_TOKEN in .env, then: docker compose up -d
@@ -10,10 +10,12 @@ services:
     restart: unless-stopped
     environment:
       ACCESS_SWITCH_TOKEN: ${ACCESS_SWITCH_TOKEN:?set ACCESS_SWITCH_TOKEN}
-      STATE_FILE: /data/state.json
+      AUTHORIZED_SERVICES: ${AUTHORIZED_SERVICES:-toto}
       DEFAULT_OPEN: "false"
     volumes:
       - access-switch-state:/data
+  # optional explicit list (writable):
+  # - ./services.json:/data/services.json
     networks:
       - traefik
     healthcheck:
@@ -31,7 +33,7 @@ services:
       - traefik.http.routers.toto.entrypoints=websecure
       - traefik.http.routers.toto.tls=true
       - traefik.http.routers.toto.middlewares=access-check
-      - traefik.http.middlewares.access-check.forwardauth.address=http://access-switch:8080/check
+      - traefik.http.middlewares.access-check.forwardauth.address=http://access-switch:8080/check/toto
       - traefik.http.services.toto.loadbalancer.server.port=80
     networks:
       - traefik

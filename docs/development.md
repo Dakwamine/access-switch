@@ -77,9 +77,9 @@ Uses `https://access-switch.ddev.site` and token `dev-token-change-me` by defaul
 
 ```bash
 export ACCESS_SWITCH_TOKEN=test
-export STATE_FILE=$PWD/data/state.json
 export DEFAULT_OPEN=false
-mkdir -p data
+sudo mkdir -p /data/states
+sudo chmod 777 /data /data/states
 php -S 127.0.0.1:8080 -t public public/index.php &
 DDEV_PRIMARY_URL=http://127.0.0.1:8080 ./scripts/test-api.sh
 ```
@@ -88,7 +88,8 @@ DDEV_PRIMARY_URL=http://127.0.0.1:8080 ./scripts/test-api.sh
 |----------|------|
 | `DDEV_PRIMARY_URL` | Base URL of the running app (name kept for CI compatibility) |
 | `ACCESS_SWITCH_TOKEN` | Bearer token for `POST /admin` |
-| `STATE_FILE` | State file path when using `php -S` (DDEV sets this in `.ddev/config.yaml`) |
+
+State files are written to `/data/states/` (fixed path). DDEV mounts the project `data/` directory on `/data` via `.ddev/docker-compose.data.yaml`.
 
 CI runs the same smoke tests with `php -S`; see [deployment.md](deployment.md#cicd).
 

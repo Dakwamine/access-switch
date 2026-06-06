@@ -39,10 +39,10 @@ jobs:
       - name: API smoke tests
         env:
           ACCESS_SWITCH_TOKEN: ci-test-token
-          STATE_FILE: ${{ github.workspace }}/data/state.json
           DEFAULT_OPEN: "false"
         run: |
-          mkdir -p data
+          sudo mkdir -p /data/states
+          sudo chmod 777 /data /data/states
           php -S 127.0.0.1:18080 -t public public/index.php &
           sleep 2
           DDEV_PRIMARY_URL=http://127.0.0.1:18080 ACCESS_SWITCH_TOKEN=ci-test-token bash scripts/test-api.sh

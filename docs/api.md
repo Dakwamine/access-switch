@@ -17,17 +17,26 @@ Health check (Docker healthcheck, monitoring).
 
 Called by Traefik **forwardAuth** before each visitor request.
 
+Checks the **`default`** service (same as `GET /check/default`).
+
 | State | Code | Traefik effect |
 |-------|------|----------------|
 | Access **open** | 200 | Request forwarded to the application |
 | Access **closed** | 503 | Request blocked (Service Unavailable) |
+| Unknown / unauthorized service | 503 | Fail-closed |
 | State read error | 503 | Fail-closed |
 
 Empty response body (sufficient for forwardAuth).
 
+## `GET /check/{serviceId}`
+
+Same as `GET /check`, but for a named service (e.g. `toto` → `/check/toto`).
+
+Each Traefik router can point its forwardAuth middleware to a different service URL.
+
 ## `POST /admin`
 
-Toggles access. **Expose only on a trusted network** (internal Docker, LAN, admin VPN).
+Toggles access for one service. **Expose only on a trusted network** (internal Docker, LAN, admin VPN).
 
 ### Authentication
 
@@ -42,19 +51,20 @@ Constant-time comparison (`hash_equals`). Token set via the `ACCESS_SWITCH_TOKEN
 ### Body (JSON)
 
 ```json
-{ "open": true }
+{ "open": true, "service": "toto" }
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `open` | boolean | `true` = public access allowed, `false` = closed |
+| `service` | string (optional) | Service id; defaults to `default` |
 
 ### Responses
 
 | Code | Situation |
 |------|-----------|
-| 200 | State saved; body `{"open":bool,"updated_at":"ISO8601"}` |
-| 400 | Invalid JSON or missing / non-boolean `open` field |
+| 200 | State saved; body `{"service":"…","open":bool,"updated_at":"ISO8601"}` |
+| 400 | Invalid JSON, missing / non-boolean `open`, invalid or unauthorized `service` |
 | 401 | Missing or invalid token |
 | 503 | `ACCESS_SWITCH_TOKEN` not configured on the server |
 | 500 | Failed to write state file |
@@ -62,22 +72,30 @@ Constant-time comparison (`hash_equals`). Token set via the `ACCESS_SWITCH_TOKEN
 ### Examples
 
 ```bash
-# Close access
+# Close access (default service)
 curl -sS -X POST http://access-switch:8080/admin \
   -H "Authorization: Bearer $ACCESS_SWITCH_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"open": false}'
 
-# Open access
+# Open access for a named service
 curl -sS -X POST http://access-switch:8080/admin \
   -H "Authorization: Bearer $ACCESS_SWITCH_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"open": true}'
+  -d '{"service": "toto", "open": true}'
 ```
 
 ## Persistence
 
-State stored in `STATE_FILE` (default: `/data/state.json`):
+State is stored under fixed paths inside the container (mount a volume on `/data`):
+
+| Path | Role |
+|------|------|
+| `/data/states/{serviceId}.json` | Open/closed state per service |
+| `/data/services.json` | Optional authorized-services list (writable; bind-mount or volume) |
+| `/data/state.json` | Legacy read-only fallback for `default` until migrated |
+
+Example state file (`/data/states/toto.json`):
 
 ```json
 {
@@ -88,12 +106,44 @@ State stored in `STATE_FILE` (default: `/data/state.json`):
 
 Survives container restarts when a volume is mounted on `/data`.
 
+## Authorized services
+
+The **`default`** service is always allowed.
+
+Other services are authorized according to this hierarchy (each level can only **restrict** further):
+
+| Layer | When active | Effect |
+|-------|-------------|--------|
+| **Existing state file** | No `/data/services.json` | A service with `/data/states/{id}.json` already on disk works for `GET /check` |
+| **`/data/services.json`** | File present | Only services listed in the file are allowed (replaces discovery by state file) |
+| **`AUTHORIZED_SERVICES`** | Env var non-empty | Only services listed in the env var are allowed (restricts even `services.json`) |
+
+Examples:
+
+- No config, no `services.json` — `toto` works after its state file exists (via a prior `POST /admin`, or manual file creation).
+- `services.json` lists `toto` — only listed services work; an existing state file for `autre` is ignored if `autre` is not in the file.
+- `AUTHORIZED_SERVICES=toto` and `services.json` lists `toto,autre` — `autre` returns **503** on `/check`.
+
+`POST /admin` follows the same rules, except when neither `services.json` nor `AUTHORIZED_SERVICES` is set: any valid service id can be toggled (creates the state file on first write).
+
+Service ids must match `^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$`.
+
+### `/data/services.json`
+
+Optional JSON array (writable volume — not read-only):
+
+```json
+["toto", "autre-app"]
+```
+
+Bind-mount or persist on the `/data` volume. A future management UI may edit this file.
+
 ## Environment variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `ACCESS_SWITCH_TOKEN` | *(empty)* | Admin secret; if empty, `/admin` returns 503 |
-| `STATE_FILE` | `/data/state.json` | State file path |
 | `DEFAULT_OPEN` | `false` | State when the file does not exist yet |
+| `AUTHORIZED_SERVICES` | *(empty)* | Additional restriction: comma-separated ids; when set, only listed services are allowed |
 
 See also [deployment.md](deployment.md).

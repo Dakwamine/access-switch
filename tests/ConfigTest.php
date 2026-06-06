@@ -25,28 +25,28 @@ final class ConfigTest extends TestCase
 
     public function testFromEnvironmentUsesDefaults(): void
     {
-        $this->unsetEnv('STATE_FILE');
         $this->unsetEnv('ACCESS_SWITCH_TOKEN');
         $this->unsetEnv('DEFAULT_OPEN');
+        $this->unsetEnv('AUTHORIZED_SERVICES');
 
         $config = Config::fromEnvironment();
 
-        $this->assertSame('/data/state.json', $config->stateFile);
         $this->assertSame('', $config->accessSwitchToken);
         $this->assertFalse($config->defaultOpen);
+        $this->assertSame([], $config->authorizedServices);
     }
 
     public function testFromEnvironmentReadsVariables(): void
     {
-        $this->setEnv('STATE_FILE', '/tmp/custom.json');
         $this->setEnv('ACCESS_SWITCH_TOKEN', 'secret');
         $this->setEnv('DEFAULT_OPEN', 'true');
+        $this->setEnv('AUTHORIZED_SERVICES', 'toto, autre');
 
         $config = Config::fromEnvironment();
 
-        $this->assertSame('/tmp/custom.json', $config->stateFile);
         $this->assertSame('secret', $config->accessSwitchToken);
         $this->assertTrue($config->defaultOpen);
+        $this->assertSame(['toto', 'autre'], $config->authorizedServices);
     }
 
     private function setEnv(string $key, string $value): void

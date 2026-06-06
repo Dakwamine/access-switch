@@ -6,7 +6,7 @@ HTTP access switch for Traefik (Raspberry Pi, Docker/Portainer): ON/OFF via API 
 
 ## Architecture
 
-- **Root app**: `GET /check`, `POST /admin`, state in `/data/state.json`.
+- **Root app**: `GET /check` / `GET /check/{serviceId}`, `POST /admin`, state in `/data/states/{serviceId}.json`.
 - **Image**: `dakwamine/access-switch` on Docker Hub.
 - **Deploy**: `deploy/docker-compose.yml` (image pull only).
 - **Docs**: `docs/README.md`, `docs/service.md`, `docs/api.md`.

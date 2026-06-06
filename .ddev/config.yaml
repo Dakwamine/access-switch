@@ -7,5 +7,4 @@ omit_containers:
   - db
 web_environment:
   - ACCESS_SWITCH_TOKEN=dev-token-change-me
-  - STATE_FILE=/var/www/html/data/state.json
   - DEFAULT_OPEN=false
