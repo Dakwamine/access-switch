@@ -6,7 +6,7 @@ Official image on Docker Hub:
 
 ```text
 dakwamine/access-switch:latest
-dakwamine/access-switch:<version>   # e.g. v1.0.0 on git tag
+dakwamine/access-switch:<version>   # e.g. 1.0.0 on git tag
 ```
 
 ```bash
@@ -39,12 +39,21 @@ Customize:
 - traefik.http.middlewares.access-check.forwardauth.address=http://access-switch:8080/check
 ```
 
-## CI/CD (maintainers)
+## CI/CD
 
-Workflow [`.github/workflows/docker-publish.yml`](../.github/workflows/docker-publish.yml):
+| Workflow | Role |
+|----------|------|
+| [`.github/workflows/test.yml`](../.github/workflows/test.yml) | PHPUnit, then API smoke tests (`php -S` + `scripts/test-api.sh`) on every push/PR |
+| [`.github/workflows/docker-publish.yml`](../.github/workflows/docker-publish.yml) | Same tests, then build and push `dakwamine/access-switch` to Docker Hub on `main` / `master` or semver tag (e.g. `1.0.0`) |
 
-1. Runs API tests.
-2. On push to `main` / `master` or tag `v*`, builds and pushes `dakwamine/access-switch` to Docker Hub.
+### Docker Hub publish (maintainers)
+
+Release tag (SemVer, **no `v` prefix** — same as the Docker image tag):
+
+```bash
+git tag 1.0.0
+git push origin 1.0.0
+```
 
 GitHub repository secrets:
 

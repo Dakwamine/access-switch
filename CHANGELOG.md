@@ -2,7 +2,7 @@
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [1.0.0](https://github.com/dakwamine/access-switch/releases/tag/v1.0.0) - 2026-06-03
+## [1.0.0](https://github.com/dakwamine/access-switch/releases/tag/1.0.0) - 2026-06-03
 
 First public release.
 
@@ -19,4 +19,4 @@ First public release.
 - Traefik stack example: `deploy/docker-compose.yml` (pull image, no build)
 - License: **GNU AGPL-3.0-or-later** (AGPL 3+)
 
-[1.0.0]: https://github.com/dakwamine/access-switch/releases/tag/v1.0.0
+[1.0.0]: https://github.com/dakwamine/access-switch/releases/tag/1.0.0
