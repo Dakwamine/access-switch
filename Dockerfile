@@ -14,8 +14,11 @@ COPY public ./public
 COPY resources ./resources
 COPY src ./src
 COPY Caddyfile /etc/caddy/Caddyfile
-RUN mkdir -p /data
+RUN addgroup -g 1000 app && adduser -u 1000 -G app -D app \
+    && mkdir -p /data \
+    && chown -R app:app /app /data /etc/caddy
 EXPOSE 8080
 ENV SERVER_NAME=:8080
+USER app
 ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["frankenphp", "run", "--config", "/etc/caddy/Caddyfile"]

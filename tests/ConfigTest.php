@@ -29,13 +29,19 @@ final class ConfigTest extends TestCase
         $this->unsetEnv('DEFAULT_OPEN');
         $this->unsetEnv('AUTHORIZED_SERVICES');
         $this->unsetEnv('UI_ENABLED');
+        $this->unsetEnv('ACCESS_SWITCH_UI_SECRET');
+        $this->unsetEnv('RATE_LIMIT_MAX_ATTEMPTS');
+        $this->unsetEnv('RATE_LIMIT_WINDOW_SECONDS');
 
         $config = Config::fromEnvironment();
 
         $this->assertSame('', $config->accessSwitchToken);
+        $this->assertSame('', $config->uiSessionSecret);
         $this->assertFalse($config->defaultOpen);
         $this->assertSame([], $config->authorizedServices);
         $this->assertFalse($config->uiEnabled);
+        $this->assertSame(30, $config->rateLimitMaxAttempts);
+        $this->assertSame(60, $config->rateLimitWindowSeconds);
     }
 
     public function testFromEnvironmentReadsVariables(): void
@@ -48,9 +54,30 @@ final class ConfigTest extends TestCase
         $config = Config::fromEnvironment();
 
         $this->assertSame('secret', $config->accessSwitchToken);
+        $this->assertSame('secret', $config->uiSessionSecret);
         $this->assertTrue($config->defaultOpen);
         $this->assertSame(['toto', 'autre'], $config->authorizedServices);
         $this->assertTrue($config->uiEnabled);
+    }
+
+    public function testUiSecretFallsBackToAccessToken(): void
+    {
+        $this->setEnv('ACCESS_SWITCH_TOKEN', 'api-secret');
+
+        $config = Config::fromEnvironment();
+
+        $this->assertSame('api-secret', $config->uiSessionSecret);
+    }
+
+    public function testUiSecretUsesDedicatedValueWhenSet(): void
+    {
+        $this->setEnv('ACCESS_SWITCH_TOKEN', 'api-secret');
+        $this->setEnv('ACCESS_SWITCH_UI_SECRET', 'ui-secret');
+
+        $config = Config::fromEnvironment();
+
+        $this->assertSame('api-secret', $config->accessSwitchToken);
+        $this->assertSame('ui-secret', $config->uiSessionSecret);
     }
 
     private function setEnv(string $key, string $value): void

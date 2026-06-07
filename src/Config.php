@@ -16,6 +16,9 @@ final class Config
         public readonly bool $uiEnabled = false,
         public readonly int $uiSessionTtl = 2_592_000,
         public readonly bool $uiCookieSecure = false,
+        public readonly string $uiSessionSecret = '',
+        public readonly int $rateLimitMaxAttempts = 30,
+        public readonly int $rateLimitWindowSeconds = 60,
     ) {
     }
 
@@ -36,6 +39,10 @@ final class Config
             getenv('UI_COOKIE_SECURE') ?: 'false',
             FILTER_VALIDATE_BOOLEAN
         );
+        $uiSecretRaw = getenv('ACCESS_SWITCH_UI_SECRET') ?: '';
+        $uiSessionSecret = $uiSecretRaw !== '' ? $uiSecretRaw : $accessSwitchToken;
+        $rateLimitMaxAttempts = self::parsePositiveInt(getenv('RATE_LIMIT_MAX_ATTEMPTS') ?: '30', 30);
+        $rateLimitWindowSeconds = self::parsePositiveInt(getenv('RATE_LIMIT_WINDOW_SECONDS') ?: '60', 60);
 
         return new self(
             $accessSwitchToken,
@@ -44,6 +51,9 @@ final class Config
             $uiEnabled,
             $uiSessionTtl,
             $uiCookieSecure,
+            $uiSessionSecret,
+            $rateLimitMaxAttempts,
+            $rateLimitWindowSeconds,
         );
     }
 

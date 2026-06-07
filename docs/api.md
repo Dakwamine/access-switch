@@ -66,6 +66,7 @@ Constant-time comparison (`hash_equals`). Token set via the `ACCESS_SWITCH_TOKEN
 | 200 | State saved; body `{"service":"…","open":bool,"updated_at":"ISO8601"}` |
 | 400 | Invalid JSON, missing / non-boolean `open`, invalid or unauthorized `service` |
 | 401 | Missing or invalid token |
+| 429 | Too many attempts from the same client IP |
 | 503 | `ACCESS_SWITCH_TOKEN` not configured on the server |
 | 500 | Failed to write state file |
 
@@ -147,6 +148,7 @@ On success, sets an `HttpOnly` session cookie (`access_switch_ui`). The browser 
 |------|-----------|
 | 200 | Cookie set |
 | 401 | Invalid token |
+| 429 | Too many login attempts from the same client IP |
 | 404 | `UI_ENABLED=false` |
 | 503 | `ACCESS_SWITCH_TOKEN` not configured |
 
@@ -217,10 +219,13 @@ Bind-mount or persist on the `/data` volume.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `ACCESS_SWITCH_TOKEN` | *(empty)* | Admin secret; if empty, `/admin` returns 503 |
+| `ACCESS_SWITCH_UI_SECRET` | *(same as token)* | HMAC key for UI session cookies; when set, only this signs cookies (API Bearer still uses `ACCESS_SWITCH_TOKEN`) |
 | `DEFAULT_OPEN` | `false` | State when the file does not exist yet |
 | `AUTHORIZED_SERVICES` | *(empty)* | Additional restriction: comma-separated ids; when set, only listed services are allowed |
 | `UI_ENABLED` | `false` | Enable `/ui` and related routes; expose only on LAN/VPN |
 | `UI_SESSION_TTL` | `2592000` | UI session cookie lifetime (seconds) |
 | `UI_COOKIE_SECURE` | `false` | Add `Secure` flag to UI cookie (HTTPS) |
+| `RATE_LIMIT_MAX_ATTEMPTS` | `30` | Max auth attempts per IP per window on `POST /admin` and `POST /ui/login`; `0` disables |
+| `RATE_LIMIT_WINDOW_SECONDS` | `60` | Rate-limit window in seconds |
 
 See also [deployment.md](deployment.md).

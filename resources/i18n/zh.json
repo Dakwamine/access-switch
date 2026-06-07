@@ -13,6 +13,7 @@
   "error.unauthorized": "未授权。",
   "error.session_expired": "会话已过期。",
   "error.login_denied": "登录被拒绝。",
+  "error.rate_limited": "尝试次数过多，请稍后再试。",
   "error.load_failed": "无法加载服务。",
   "error.toggle_failed": "切换失败。",
   "error.state_read_failed": "无法读取服务 {service} 的状态。",

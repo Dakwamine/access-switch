@@ -13,6 +13,7 @@
   "error.unauthorized": "Unauthorized.",
   "error.session_expired": "Session expired.",
   "error.login_denied": "Sign-in denied.",
+  "error.rate_limited": "Too many attempts. Try again later.",
   "error.load_failed": "Unable to load services.",
   "error.toggle_failed": "Toggle failed.",
   "error.state_read_failed": "Unable to read state for service {service}.",

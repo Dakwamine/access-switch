@@ -13,6 +13,7 @@
   "error.unauthorized": "Нет доступа.",
   "error.session_expired": "Сессия истекла.",
   "error.login_denied": "Вход отклонён.",
+  "error.rate_limited": "Слишком много попыток. Повторите позже.",
   "error.load_failed": "Не удалось загрузить службы.",
   "error.toggle_failed": "Не удалось переключить.",
   "error.state_read_failed": "Не удалось прочитать состояние службы {service}.",

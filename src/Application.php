@@ -14,6 +14,7 @@ final class Application
         private readonly ServiceRegistry $registry,
         private readonly ServiceStateStore $store,
         private readonly UiSession $uiSession,
+        private readonly RateLimiter $rateLimiter = new RateLimiter(),
     ) {
     }
 
@@ -21,6 +22,7 @@ final class Application
      * @param string|null $body                 Override for tests (default: php://input on POST)
      * @param string|null $authorizationHeader  Override for tests (default: HTTP_AUTHORIZATION)
      * @param string|null $cookieHeader         Override for tests (default: HTTP_COOKIE)
+     * @param string|null $clientIp             Override for tests (default: REMOTE_ADDR)
      */
     public function handle(
         string $method,
@@ -28,12 +30,13 @@ final class Application
         ?string $body = null,
         ?string $authorizationHeader = null,
         ?string $cookieHeader = null,
+        ?string $clientIp = null,
     ): Response {
         $path = rtrim($path, '/') ?: '/';
 
         return match ($method) {
             'GET' => $this->handleGet($path, $authorizationHeader, $cookieHeader),
-            'POST' => $this->handlePost($path, $body, $authorizationHeader, $cookieHeader),
+            'POST' => $this->handlePost($path, $body, $authorizationHeader, $cookieHeader, $clientIp),
             default => Response::empty(405),
         };
     }
@@ -64,10 +67,11 @@ final class Application
         ?string $body,
         ?string $authorizationHeader,
         ?string $cookieHeader,
+        ?string $clientIp,
     ): Response {
         return match ($path) {
-            '/admin' => $this->admin($body, $authorizationHeader, $cookieHeader),
-            '/ui/login' => $this->uiLogin($body, $cookieHeader),
+            '/admin' => $this->admin($body, $authorizationHeader, $cookieHeader, $clientIp),
+            '/ui/login' => $this->uiLogin($body, $cookieHeader, $clientIp),
             '/ui/logout' => $this->uiLogout(),
             '/ui/lang' => $this->uiSetLang($body),
             default => Response::empty(404),
@@ -131,13 +135,17 @@ final class Application
         return Response::json(['services' => $services]);
     }
 
-    private function uiLogin(?string $body, ?string $cookieHeader): Response
+    private function uiLogin(?string $body, ?string $cookieHeader, ?string $clientIp): Response
     {
         if (!$this->config->uiEnabled) {
             return Response::empty(404);
         }
 
         $lang = $this->resolveUiLang($cookieHeader);
+
+        if ($rateLimited = $this->rateLimitResponse($clientIp, $lang, true)) {
+            return $rateLimited;
+        }
 
         if ($this->config->accessSwitchToken === '') {
             return Response::json(
@@ -238,9 +246,13 @@ final class Application
         return Response::empty(503);
     }
 
-    private function admin(?string $body, ?string $authorizationHeader, ?string $cookieHeader): Response
+    private function admin(?string $body, ?string $authorizationHeader, ?string $cookieHeader, ?string $clientIp): Response
     {
         $lang = $this->adminErrorLang($cookieHeader);
+
+        if ($rateLimited = $this->rateLimitResponse($clientIp, $lang, false)) {
+            return $rateLimited;
+        }
 
         if ($this->config->accessSwitchToken === '') {
             return Response::json(
@@ -362,5 +374,29 @@ final class Application
         }
 
         return UiLocale::get($lang, $key, $vars);
+    }
+
+    private function rateLimitResponse(?string $clientIp, ?string $lang, bool $uiContext): ?Response
+    {
+        $ip = $clientIp ?? ($_SERVER['REMOTE_ADDR'] ?? '');
+        if ($ip === '') {
+            return null;
+        }
+
+        $key = 'auth:' . $ip;
+        if ($this->rateLimiter->isAllowed(
+            $key,
+            $this->config->rateLimitMaxAttempts,
+            $this->config->rateLimitWindowSeconds,
+        )) {
+            return null;
+        }
+
+        $errorKey = 'error.rate_limited';
+        $error = $uiContext
+            ? $this->uiError($lang ?? 'en', $errorKey)
+            : $this->adminError($lang, $errorKey);
+
+        return Response::json(['error' => $error], 429);
     }
 }

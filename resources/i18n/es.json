@@ -13,6 +13,7 @@
   "error.unauthorized": "No autorizado.",
   "error.session_expired": "Sesión expirada.",
   "error.login_denied": "Inicio de sesión denegado.",
+  "error.rate_limited": "Demasiados intentos. Inténtelo más tarde.",
   "error.load_failed": "No se pueden cargar los servicios.",
   "error.toggle_failed": "Error al cambiar el estado.",
   "error.state_read_failed": "No se puede leer el estado del servicio {service}.",

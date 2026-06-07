@@ -9,6 +9,7 @@ use AccessSwitch\Config;
 use AccessSwitch\Paths;
 use AccessSwitch\ServiceRegistry;
 use AccessSwitch\ServiceStateStore;
+use AccessSwitch\RateLimiter;
 use AccessSwitch\UiSession;
 
 final class ApplicationTest extends TestCase
@@ -350,6 +351,59 @@ final class ApplicationTest extends TestCase
         $this->assertSame(401, $response->status);
     }
 
+    public function testAdminReturns429WhenRateLimited(): void
+    {
+        RateLimiter::reset();
+        $config = new Config('test-secret', false, [], false, 2_592_000, false, 'test-secret', 2, 60);
+        $app = $this->appFromConfig($config);
+
+        $this->assertSame(401, $app->handle('POST', '/admin', '{"open":true}', 'Bearer wrong', null, '10.0.0.1')->status);
+        $this->assertSame(401, $app->handle('POST', '/admin', '{"open":true}', 'Bearer wrong', null, '10.0.0.1')->status);
+        $this->assertSame(429, $app->handle('POST', '/admin', '{"open":true}', 'Bearer wrong', null, '10.0.0.1')->status);
+    }
+
+    public function testRateLimitSharedBetweenAdminAndUiLogin(): void
+    {
+        RateLimiter::reset();
+        $config = new Config('test-secret', false, [], true, 2_592_000, false, 'test-secret', 2, 60);
+        $app = $this->appFromConfig($config);
+        $ip = '10.0.0.2';
+
+        $this->assertSame(401, $app->handle('POST', '/admin', '{"open":true}', 'Bearer wrong', null, $ip)->status);
+        $this->assertSame(401, $app->handle('POST', '/ui/login', '{"token":"wrong"}', null, null, $ip)->status);
+        $this->assertSame(429, $app->handle('POST', '/admin', '{"open":true}', 'Bearer wrong', null, $ip)->status);
+        $this->assertSame(429, $app->handle('POST', '/ui/login', '{"token":"wrong"}', null, null, $ip)->status);
+    }
+
+    public function testRateLimitWindowExpires(): void
+    {
+        RateLimiter::reset();
+        $config = new Config('test-secret', false, [], false, 2_592_000, false, 'test-secret', 1, 1);
+        $app = $this->appFromConfig($config);
+        $ip = '10.0.0.3';
+
+        $this->assertSame(401, $app->handle('POST', '/admin', '{"open":true}', 'Bearer wrong', null, $ip)->status);
+        $this->assertSame(429, $app->handle('POST', '/admin', '{"open":true}', 'Bearer wrong', null, $ip)->status);
+
+        sleep(1);
+
+        $this->assertSame(401, $app->handle('POST', '/admin', '{"open":true}', 'Bearer wrong', null, $ip)->status);
+    }
+
+    public function testUiSessionUsesDedicatedSecretWhenConfigured(): void
+    {
+        $config = new Config('api-secret', false, [], true, 2_592_000, false, 'ui-secret');
+        $app = $this->appFromConfig($config);
+        $login = $app->handle('POST', '/ui/login', '{"token":"api-secret"}');
+        $this->assertSame(200, $login->status);
+        $cookie = $login->headers['Set-Cookie'];
+
+        $sessionWithApiSecret = new UiSession('api-secret', 3600, false);
+        $this->assertFalse($sessionWithApiSecret->isValid($cookie));
+
+        $this->assertSame(200, $app->handle('GET', '/admin/status', null, null, $cookie)->status);
+    }
+
     /**
      * @param list<string> $authorizedServices
      */
@@ -357,12 +411,20 @@ final class ApplicationTest extends TestCase
         string $token = 'test-secret',
         array $authorizedServices = [],
         bool $uiEnabled = false,
+        ?string $uiSessionSecret = null,
     ): Application {
-        $config = new Config($token, false, $authorizedServices, $uiEnabled);
+        $uiSecret = $uiSessionSecret ?? $token;
+        $config = new Config($token, false, $authorizedServices, $uiEnabled, 2_592_000, false, $uiSecret);
+
+        return $this->appFromConfig($config);
+    }
+
+    private function appFromConfig(Config $config): Application
+    {
         $paths = new Paths($this->dataDir);
         $registry = ServiceRegistry::fromConfig($config, $paths);
         $store = new ServiceStateStore($paths, $config->defaultOpen);
-        $uiSession = new UiSession($token, 3600, false);
+        $uiSession = new UiSession($config->uiSessionSecret, 3600, false);
 
         return new Application($config, $registry, $store, $uiSession);
     }

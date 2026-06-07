@@ -13,6 +13,7 @@
   "error.unauthorized": "अनधिकृत।",
   "error.session_expired": "सत्र समाप्त हो गया।",
   "error.login_denied": "साइन इन अस्वीकृत।",
+  "error.rate_limited": "बहुत अधिक प्रयास। बाद में पुनः प्रयास करें।",
   "error.load_failed": "सेवाएँ लोड नहीं हो सकीं।",
   "error.toggle_failed": "टॉगल विफल।",
   "error.state_read_failed": "सेवा {service} की स्थिति पढ़ नहीं सकी।",

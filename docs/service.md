@@ -36,6 +36,7 @@ docker build -t dakwamine/access-switch:local .
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `ACCESS_SWITCH_TOKEN` | — | Admin API secret (required in production) |
+| `ACCESS_SWITCH_UI_SECRET` | *(token)* | Optional separate key for UI session cookie HMAC |
 | `DEFAULT_OPEN` | `false` | State when the state file does not exist |
 | `AUTHORIZED_SERVICES` | *(empty)* | Optional extra restriction (CSV); when set, only listed ids are allowed |
 | `UI_ENABLED` | `false` | Serve `/ui` and UI admin routes; keep **false** unless exposed on LAN/VPN only |

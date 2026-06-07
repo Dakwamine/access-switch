@@ -13,6 +13,7 @@
   "error.unauthorized": "غير مصرّح.",
   "error.session_expired": "انتهت الجلسة.",
   "error.login_denied": "رُفض تسجيل الدخول.",
+  "error.rate_limited": "محاولات كثيرة جداً. حاول لاحقاً.",
   "error.load_failed": "تعذّر تحميل الخدمات.",
   "error.toggle_failed": "فشل التبديل.",
   "error.state_read_failed": "تعذّر قراءة حالة الخدمة {service}.",

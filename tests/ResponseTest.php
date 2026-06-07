@@ -23,4 +23,12 @@ final class ResponseTest extends TestCase
         $this->assertSame('application/json; charset=utf-8', $response->headers['Content-Type']);
         $this->assertSame('{"status":"ok"}', $response->body);
     }
+
+    public function testHtmlResponseIncludesSecurityHeaders(): void
+    {
+        $response = Response::html('<p>ok</p>');
+        $this->assertSame('nosniff', $response->headers['X-Content-Type-Options']);
+        $this->assertSame('DENY', $response->headers['X-Frame-Options']);
+        $this->assertStringContainsString("connect-src 'self'", $response->headers['Content-Security-Policy']);
+    }
 }

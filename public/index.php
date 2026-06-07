@@ -21,7 +21,7 @@ $config = Config::fromEnvironment();
 $paths = new Paths();
 $registry = ServiceRegistry::fromConfig($config, $paths);
 $store = new ServiceStateStore($paths, $config->defaultOpen);
-$uiSession = new UiSession($config->accessSwitchToken, $config->uiSessionTtl, $config->uiCookieSecure);
+$uiSession = new UiSession($config->uiSessionSecret, $config->uiSessionTtl, $config->uiCookieSecure);
 $app = new Application($config, $registry, $store, $uiSession);
 
 try {

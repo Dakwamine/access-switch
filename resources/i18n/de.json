@@ -13,6 +13,7 @@
   "error.unauthorized": "Nicht autorisiert.",
   "error.session_expired": "Sitzung abgelaufen.",
   "error.login_denied": "Anmeldung abgelehnt.",
+  "error.rate_limited": "Zu viele Versuche. Bitte später erneut versuchen.",
   "error.load_failed": "Dienste können nicht geladen werden.",
   "error.toggle_failed": "Umschalten fehlgeschlagen.",
   "error.state_read_failed": "Status für Dienst {service} kann nicht gelesen werden.",
