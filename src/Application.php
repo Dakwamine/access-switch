@@ -378,12 +378,26 @@ final class Application
 
     private function rateLimitResponse(?string $clientIp, ?string $lang, bool $uiContext): ?Response
     {
+        $remoteAddr = $_SERVER['REMOTE_ADDR'] ?? '';
+        $xForwardedFor = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? null;
+        $xRealIp = $_SERVER['HTTP_X_REAL_IP'] ?? null;
         $ip = $clientIp ?? ClientIp::resolve(
-            $_SERVER['REMOTE_ADDR'] ?? '',
-            $_SERVER['HTTP_X_FORWARDED_FOR'] ?? null,
-            $_SERVER['HTTP_X_REAL_IP'] ?? null,
+            $remoteAddr,
+            $xForwardedFor,
+            $xRealIp,
             $this->config->trustedProxies,
         );
+
+        if (filter_var(getenv('LOG_CLIENT_IP') ?: 'false', FILTER_VALIDATE_BOOLEAN)) {
+            error_log(sprintf(
+                'access-switch client-ip remote=%s x-real-ip=%s x-forwarded-for=%s resolved=%s',
+                $remoteAddr !== '' ? $remoteAddr : '-',
+                $xRealIp ?? '-',
+                $xForwardedFor ?? '-',
+                $ip !== '' ? $ip : '-',
+            ));
+        }
+
         if ($ip === '') {
             return null;
         }

@@ -228,5 +228,6 @@ Bind-mount or persist on the `/data` volume.
 | `RATE_LIMIT_MAX_ATTEMPTS` | `30` | Max auth attempts per IP per window on `POST /admin` and `POST /ui/login`; `0` disables |
 | `RATE_LIMIT_WINDOW_SECONDS` | `60` | Rate-limit window in seconds |
 | `TRUSTED_PROXIES` | *(empty)* | Comma-separated proxy IPs or IPv4 CIDRs; when `REMOTE_ADDR` matches, client IP is taken from `X-Real-IP` then leftmost `X-Forwarded-For` |
+| `LOG_CLIENT_IP` | `false` | Log `remote` / `X-Real-IP` / `X-Forwarded-For` / resolved IP on `POST /admin` and `POST /ui/login` (stderr; for proxy debugging) |
 
 See also [deployment.md](deployment.md).
