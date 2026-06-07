@@ -20,7 +20,16 @@ final class RateLimiter
             return false;
         }
 
-        return count($this->readTimestamps($key, $windowSeconds, $now ?? time())) >= $maxAttempts;
+        return $this->attemptCount($key, $windowSeconds, $now) >= $maxAttempts;
+    }
+
+    public function attemptCount(string $key, int $windowSeconds, ?int $now = null): int
+    {
+        if ($windowSeconds <= 0) {
+            return 0;
+        }
+
+        return count($this->readTimestamps($key, $windowSeconds, $now ?? time()));
     }
 
     public function recordAttempt(string $key, int $windowSeconds, ?int $now = null): void
@@ -78,7 +87,7 @@ final class RateLimiter
         $cutoff = $now - $windowSeconds;
         $timestamps = self::$attempts[$key] ?? [];
 
-        return array_values(array_filter($timestamps, static fn (int $t): bool => $t > $cutoff));
+        return $this->filterTimestamps($timestamps, $cutoff);
     }
 
     private function recordAttemptMemory(string $key, int $windowSeconds, int $now): void
@@ -96,23 +105,21 @@ final class RateLimiter
             return [];
         }
 
-        $path = $dir . '/' . hash('sha256', $key) . '.json';
+        $path = $this->filePath($dir, $key);
         if (!is_file($path)) {
             return [];
         }
 
-        $raw = @file_get_contents($path);
-        $timestamps = is_string($raw) && $raw !== '' ? json_decode($raw, true) : [];
-        if (!is_array($timestamps)) {
-            return [];
-        }
+        $timestamps = [];
+        $this->withLockedFile($path, $dir, static function ($handle) use (&$timestamps): void {
+            $raw = stream_get_contents($handle);
+            $decoded = is_string($raw) && $raw !== '' ? json_decode($raw, true) : [];
+            if (is_array($decoded)) {
+                $timestamps = $decoded;
+            }
+        });
 
-        $cutoff = $now - $windowSeconds;
-
-        return array_values(array_filter(
-            $timestamps,
-            static fn (mixed $t): bool => is_int($t) && $t > $cutoff,
-        ));
+        return $this->filterTimestamps($timestamps, $now - $windowSeconds);
     }
 
     private function recordAttemptFile(string $key, int $windowSeconds, int $now): void
@@ -122,42 +129,110 @@ final class RateLimiter
             return;
         }
 
-        if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
+        if (!$this->ensureStoreDir($dir)) {
             return;
         }
 
-        $path = $dir . '/' . hash('sha256', $key) . '.json';
-        $handle = @fopen($path, 'c+');
-        if ($handle === false) {
-            return;
-        }
-
-        try {
-            if (!flock($handle, LOCK_EX)) {
-                return;
-            }
-
+        $path = $this->filePath($dir, $key);
+        $written = false;
+        $this->withLockedFile($path, $dir, function ($handle) use ($windowSeconds, $now, &$written): void {
             $cutoff = $now - $windowSeconds;
             $raw = stream_get_contents($handle);
-            $timestamps = is_string($raw) && $raw !== '' ? json_decode($raw, true) : [];
-            if (!is_array($timestamps)) {
-                $timestamps = [];
-            }
-
-            $timestamps = array_values(array_filter(
-                $timestamps,
-                static fn (mixed $t): bool => is_int($t) && $t > $cutoff,
-            ));
+            $decoded = is_string($raw) && $raw !== '' ? json_decode($raw, true) : [];
+            $timestamps = is_array($decoded) ? $this->filterTimestamps($decoded, $cutoff) : [];
             $timestamps[] = $now;
 
             $payload = (string) json_encode($timestamps, JSON_THROW_ON_ERROR);
             ftruncate($handle, 0);
             rewind($handle);
-            fwrite($handle, $payload);
+            $written = fwrite($handle, $payload) !== false;
             fflush($handle);
+        });
+
+        if (!$written) {
+            $this->logStoreError('cannot write rate-limit file');
+        }
+    }
+
+    private function ensureStoreDir(string $dir): bool
+    {
+        if (is_dir($dir)) {
+            return true;
+        }
+
+        if (@mkdir($dir, 0755, true) || is_dir($dir)) {
+            return true;
+        }
+
+        $this->logStoreError('cannot create rate-limit directory: ' . $dir);
+
+        return false;
+    }
+
+    private function filePath(string $dir, string $key): string
+    {
+        return $dir . '/' . hash('sha256', $key) . '.json';
+    }
+
+    /**
+     * @param callable(resource): void $callback
+     */
+    private function withLockedFile(string $path, string $dir, callable $callback): void
+    {
+        if (!$this->ensureStoreDir($dir)) {
+            return;
+        }
+
+        $handle = @fopen($path, 'c+');
+        if ($handle === false) {
+            $this->logStoreError('cannot open rate-limit file: ' . $path);
+
+            return;
+        }
+
+        try {
+            if (!flock($handle, LOCK_EX)) {
+                $this->logStoreError('cannot lock rate-limit file: ' . $path);
+
+                return;
+            }
+
+            $callback($handle);
         } finally {
             flock($handle, LOCK_UN);
             fclose($handle);
         }
+    }
+
+    /** @param list<mixed> $timestamps */
+    private function filterTimestamps(array $timestamps, int $cutoff): array
+    {
+        $filtered = [];
+        foreach ($timestamps as $timestamp) {
+            $value = self::normalizeTimestamp($timestamp);
+            if ($value !== null && $value > $cutoff) {
+                $filtered[] = $value;
+            }
+        }
+
+        return $filtered;
+    }
+
+    private static function normalizeTimestamp(mixed $value): ?int
+    {
+        if (is_int($value)) {
+            return $value;
+        }
+
+        if (is_float($value) && (float) (int) $value === $value) {
+            return (int) $value;
+        }
+
+        return null;
+    }
+
+    private function logStoreError(string $message): void
+    {
+        error_log('access-switch rate-limit: ' . $message, 4);
     }
 }

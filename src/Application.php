@@ -86,7 +86,7 @@ final class Application
 
         try {
             $lang = $this->resolveUiLang($cookieHeader);
-            $this->logClientIpFromRequest(null, '/ui');
+            $this->logClientIpFromRequest(null, '/ui', $this->rateLimitKeyFromServer(null));
 
             return Response::html(UiPage::html($lang));
         } catch (Throwable) {
@@ -377,7 +377,7 @@ final class Application
         return UiLocale::get($lang, $key, $vars);
     }
 
-    private function logClientIpFromRequest(?string $clientIpOverride, string $path): void
+    private function logClientIpFromRequest(?string $clientIpOverride, string $path, string $rateLimitKey = ''): void
     {
         if (!$this->config->logClientIp) {
             return;
@@ -392,39 +392,52 @@ final class Application
             $xRealIp,
             $this->config->trustedProxies,
         );
+        $attempts = $rateLimitKey !== ''
+            ? $this->rateLimiter->attemptCount($rateLimitKey, $this->config->rateLimitWindowSeconds)
+            : 0;
 
         $line = sprintf(
-            'access-switch client-ip path=%s remote=%s x-real-ip=%s x-forwarded-for=%s resolved=%s',
+            'access-switch client-ip path=%s remote=%s x-real-ip=%s x-forwarded-for=%s resolved=%s rate-key=%s attempts=%d max=%d',
             $path,
             $remoteAddr !== '' ? $remoteAddr : '-',
             $xRealIp ?? '-',
             $xForwardedFor ?? '-',
             $resolvedIp !== '' ? $resolvedIp : '-',
+            $rateLimitKey !== '' ? $rateLimitKey : '-',
+            $attempts,
+            $this->config->rateLimitMaxAttempts,
         );
         // FrankenPHP php_server: stderr is not plumbed to docker logs.
         // message_type 4 (SAPI) routes to the Caddy logger → visible in Portainer.
         error_log($line, 4);
     }
 
-    private function rateLimitResponse(?string $clientIp, ?string $lang, bool $uiContext): ?Response
+    private function rateLimitKeyFromServer(?string $clientIpOverride): string
     {
         $remoteAddr = $_SERVER['REMOTE_ADDR'] ?? '';
-        $xForwardedFor = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? null;
-        $xRealIp = $_SERVER['HTTP_X_REAL_IP'] ?? null;
-        $ip = $clientIp ?? ClientIp::resolve(
+        $ip = $clientIpOverride ?? ClientIp::resolve(
             $remoteAddr,
-            $xForwardedFor,
-            $xRealIp,
+            $_SERVER['HTTP_X_FORWARDED_FOR'] ?? null,
+            $_SERVER['HTTP_X_REAL_IP'] ?? null,
             $this->config->trustedProxies,
         );
 
-        $this->logClientIpFromRequest($clientIp, $uiContext ? '/ui/login' : '/admin');
+        if ($ip === '' && $remoteAddr !== '') {
+            $ip = $remoteAddr;
+        }
 
-        if ($ip === '') {
+        return $ip !== '' ? 'auth:' . $ip : '';
+    }
+
+    private function rateLimitResponse(?string $clientIp, ?string $lang, bool $uiContext): ?Response
+    {
+        $key = $this->rateLimitKeyFromServer($clientIp);
+        $this->logClientIpFromRequest($clientIp, $uiContext ? '/ui/login' : '/admin', $key);
+
+        if ($key === '') {
             return null;
         }
 
-        $key = 'auth:' . $ip;
         if ($this->rateLimiter->isBlocked(
             $key,
             $this->config->rateLimitMaxAttempts,

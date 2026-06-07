@@ -53,6 +53,21 @@ final class RateLimiterTest extends TestCase
         $this->assertFalse($limiter->isBlocked('other', 3, 60, 103));
     }
 
+    public function testFileStoreAcceptsFloatTimestampsFromJson(): void
+    {
+        $dir = sys_get_temp_dir() . '/access-switch-rl-' . uniqid('', true);
+        mkdir($dir, 0777, true);
+        $path = $dir . '/' . hash('sha256', 'test') . '.json';
+        file_put_contents($path, '[' . (float) (time() - 5) . ',' . (float) (time() - 3) . ']');
+
+        $limiter = new RateLimiter($dir);
+        $this->assertTrue($limiter->isBlocked('test', 2, 60));
+
+        RateLimiter::reset($dir);
+        @unlink($path);
+        @rmdir($dir);
+    }
+
     public function testFileStoreSharedAcrossInstances(): void
     {
         $dir = sys_get_temp_dir() . '/access-switch-rl-' . uniqid('', true);
