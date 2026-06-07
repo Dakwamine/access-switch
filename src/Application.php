@@ -401,7 +401,9 @@ final class Application
             $xForwardedFor ?? '-',
             $resolvedIp !== '' ? $resolvedIp : '-',
         );
-        @file_put_contents('php://stderr', $line . "\n", FILE_APPEND);
+        // FrankenPHP php_server: stderr is not plumbed to docker logs.
+        // message_type 4 (SAPI) routes to the Caddy logger → visible in Portainer.
+        error_log($line, 4);
     }
 
     private function rateLimitResponse(?string $clientIp, ?string $lang, bool $uiContext): ?Response
