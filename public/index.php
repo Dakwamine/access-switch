@@ -8,6 +8,7 @@ use AccessSwitch\Http\Response;
 use AccessSwitch\Paths;
 use AccessSwitch\ServiceRegistry;
 use AccessSwitch\ServiceStateStore;
+use AccessSwitch\RateLimiter;
 use AccessSwitch\UiSession;
 
 $vendorAutoload = dirname(__DIR__) . '/vendor/autoload.php';
@@ -22,7 +23,8 @@ $paths = new Paths();
 $registry = ServiceRegistry::fromConfig($config, $paths);
 $store = new ServiceStateStore($paths, $config->defaultOpen);
 $uiSession = new UiSession($config->uiSessionSecret, $config->uiSessionTtl, $config->uiCookieSecure);
-$app = new Application($config, $registry, $store, $uiSession);
+$rateLimiter = new RateLimiter($paths->rateLimitDir());
+$app = new Application($config, $registry, $store, $uiSession, $rateLimiter);
 
 try {
     $app->handle($method, $path)->send();

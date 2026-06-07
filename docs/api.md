@@ -225,7 +225,7 @@ Bind-mount or persist on the `/data` volume.
 | `UI_ENABLED` | `false` | Enable `/ui` and related routes; expose only on LAN/VPN |
 | `UI_SESSION_TTL` | `2592000` | UI session cookie lifetime (seconds) |
 | `UI_COOKIE_SECURE` | `false` | Add `Secure` flag to UI cookie (HTTPS) |
-| `RATE_LIMIT_MAX_ATTEMPTS` | `30` | Max auth attempts per IP per window on `POST /admin` and `POST /ui/login`; `0` disables |
+| `RATE_LIMIT_MAX_ATTEMPTS` | `2` | Auth attempts per IP per window on `POST /admin` and `POST /ui/login`; blocked requests return **429 before** credential check (default: 3rd try blocked even with a valid token); `0` disables |
 | `RATE_LIMIT_WINDOW_SECONDS` | `60` | Rate-limit window in seconds |
 | `TRUSTED_PROXIES` | *(empty)* | Comma-separated proxy IPs or IPv4 CIDRs; when `REMOTE_ADDR` matches, client IP is taken from `X-Real-IP` then leftmost `X-Forwarded-For` |
 | `LOG_CLIENT_IP` | `false` | Log client IP fields on `GET /ui`, `POST /admin`, and `POST /ui/login` (via FrankenPHP/Caddy logger → `docker logs`) |

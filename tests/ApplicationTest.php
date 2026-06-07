@@ -23,6 +23,7 @@ final class ApplicationTest extends TestCase
 
     protected function tearDown(): void
     {
+        RateLimiter::reset($this->dataDir . '/.ratelimit');
         $this->removeTempDataDir($this->dataDir);
     }
 
@@ -467,6 +468,32 @@ final class ApplicationTest extends TestCase
         $store = new ServiceStateStore($paths, $config->defaultOpen);
         $uiSession = new UiSession($config->uiSessionSecret, 3600, false);
 
-        return new Application($config, $registry, $store, $uiSession);
+        $rateLimiter = new RateLimiter($paths->rateLimitDir());
+
+        return new Application($config, $registry, $store, $uiSession, $rateLimiter);
+    }
+
+    public function testRateLimitFileStoreSharedAcrossInstances(): void
+    {
+        $dir = $this->dataDir . '/.ratelimit';
+        RateLimiter::reset($dir);
+        $limiterA = new RateLimiter($dir);
+        $limiterB = new RateLimiter($dir);
+
+        $this->assertTrue($limiterA->isAllowed('auth:1.2.3.4', 2, 60));
+        $this->assertTrue($limiterB->isAllowed('auth:1.2.3.4', 2, 60));
+        $this->assertFalse($limiterA->isAllowed('auth:1.2.3.4', 2, 60));
+    }
+
+    public function testUiLoginBlocksValidTokenWhenRateLimited(): void
+    {
+        RateLimiter::reset($this->dataDir . '/.ratelimit');
+        $config = new Config('test-secret', false, [], true, 2_592_000, false, 'test-secret', 2, 60);
+        $app = $this->appFromConfig($config);
+        $ip = '10.0.0.9';
+
+        $this->assertSame(401, $app->handle('POST', '/ui/login', '{"token":"wrong"}', null, null, $ip)->status);
+        $this->assertSame(401, $app->handle('POST', '/ui/login', '{"token":"wrong"}', null, null, $ip)->status);
+        $this->assertSame(429, $app->handle('POST', '/ui/login', '{"token":"test-secret"}', null, null, $ip)->status);
     }
 }

@@ -32,4 +32,9 @@ final class Paths
     {
         return $this->dataDir . '/states';
     }
+
+    public function rateLimitDir(): string
+    {
+        return $this->dataDir . '/.ratelimit';
+    }
 }

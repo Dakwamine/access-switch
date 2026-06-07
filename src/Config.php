@@ -18,7 +18,7 @@ final class Config
         public readonly int $uiSessionTtl = 2_592_000,
         public readonly bool $uiCookieSecure = false,
         public readonly string $uiSessionSecret = '',
-        public readonly int $rateLimitMaxAttempts = 30,
+        public readonly int $rateLimitMaxAttempts = 2,
         public readonly int $rateLimitWindowSeconds = 60,
         public readonly array $trustedProxies = [],
         public readonly bool $logClientIp = false,
@@ -44,7 +44,7 @@ final class Config
         );
         $uiSecretRaw = getenv('ACCESS_SWITCH_UI_SECRET') ?: '';
         $uiSessionSecret = $uiSecretRaw !== '' ? $uiSecretRaw : $accessSwitchToken;
-        $rateLimitMaxAttempts = self::parsePositiveInt(getenv('RATE_LIMIT_MAX_ATTEMPTS') ?: '30', 30);
+        $rateLimitMaxAttempts = self::parsePositiveInt(getenv('RATE_LIMIT_MAX_ATTEMPTS') ?: '2', 2);
         $rateLimitWindowSeconds = self::parsePositiveInt(getenv('RATE_LIMIT_WINDOW_SECONDS') ?: '60', 60);
         $trustedProxies = self::parseList(getenv('TRUSTED_PROXIES') ?: '');
         $logClientIp = filter_var(

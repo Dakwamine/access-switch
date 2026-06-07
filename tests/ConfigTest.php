@@ -41,7 +41,7 @@ final class ConfigTest extends TestCase
         $this->assertFalse($config->defaultOpen);
         $this->assertSame([], $config->authorizedServices);
         $this->assertFalse($config->uiEnabled);
-        $this->assertSame(30, $config->rateLimitMaxAttempts);
+        $this->assertSame(2, $config->rateLimitMaxAttempts);
         $this->assertSame(60, $config->rateLimitWindowSeconds);
     }
 

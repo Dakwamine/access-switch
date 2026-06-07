@@ -425,19 +425,21 @@ final class Application
         }
 
         $key = 'auth:' . $ip;
-        if ($this->rateLimiter->isAllowed(
+        if ($this->rateLimiter->isBlocked(
             $key,
             $this->config->rateLimitMaxAttempts,
             $this->config->rateLimitWindowSeconds,
         )) {
-            return null;
+            $errorKey = 'error.rate_limited';
+            $error = $uiContext
+                ? $this->uiError($lang ?? 'en', $errorKey)
+                : $this->adminError($lang, $errorKey);
+
+            return Response::json(['error' => $error], 429);
         }
 
-        $errorKey = 'error.rate_limited';
-        $error = $uiContext
-            ? $this->uiError($lang ?? 'en', $errorKey)
-            : $this->adminError($lang, $errorKey);
+        $this->rateLimiter->recordAttempt($key, $this->config->rateLimitWindowSeconds);
 
-        return Response::json(['error' => $error], 429);
+        return null;
     }
 }
