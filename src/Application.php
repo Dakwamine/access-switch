@@ -143,10 +143,7 @@ final class Application
         }
 
         $lang = $this->resolveUiLang($cookieHeader);
-
-        if ($rateLimited = $this->rateLimitResponse($clientIp, $lang, true)) {
-            return $rateLimited;
-        }
+        $this->logClientIpFromRequest($clientIp, '/ui/login', $this->rateLimitKeyFromServer($clientIp));
 
         if ($this->config->accessSwitchToken === '') {
             return Response::json(
@@ -170,7 +167,13 @@ final class Application
             return Response::json(['error' => $this->uiError($lang, 'error.token_field_required')], 400);
         }
 
+        if ($rateLimited = $this->rateLimitBlocked($clientIp, $lang, true)) {
+            return $rateLimited;
+        }
+
         if (!hash_equals($this->config->accessSwitchToken, $data['token'])) {
+            $this->rateLimitRecordFailure($clientIp);
+
             return Response::json(['error' => $this->uiError($lang, 'error.login_denied')], 401);
         }
 
@@ -250,10 +253,7 @@ final class Application
     private function admin(?string $body, ?string $authorizationHeader, ?string $cookieHeader, ?string $clientIp): Response
     {
         $lang = $this->adminErrorLang($cookieHeader);
-
-        if ($rateLimited = $this->rateLimitResponse($clientIp, $lang, false)) {
-            return $rateLimited;
-        }
+        $this->logClientIpFromRequest($clientIp, '/admin', $this->rateLimitKeyFromServer($clientIp));
 
         if ($this->config->accessSwitchToken === '') {
             return Response::json(
@@ -262,7 +262,13 @@ final class Application
             );
         }
 
+        if ($rateLimited = $this->rateLimitBlocked($clientIp, $lang, false)) {
+            return $rateLimited;
+        }
+
         if (!$this->isAdminAuthorized($authorizationHeader, $cookieHeader)) {
+            $this->rateLimitRecordFailure($clientIp);
+
             $key = UiLocale::extractFromCookie($cookieHeader) !== null
                 ? 'error.session_expired'
                 : 'error.unauthorized';
@@ -429,30 +435,38 @@ final class Application
         return $ip !== '' ? 'auth:' . $ip : '';
     }
 
-    private function rateLimitResponse(?string $clientIp, ?string $lang, bool $uiContext): ?Response
+    private function rateLimitBlocked(?string $clientIp, ?string $lang, bool $uiContext): ?Response
     {
         $key = $this->rateLimitKeyFromServer($clientIp);
-        $this->logClientIpFromRequest($clientIp, $uiContext ? '/ui/login' : '/admin', $key);
 
         if ($key === '') {
             return null;
         }
 
-        if ($this->rateLimiter->isBlocked(
+        if (!$this->rateLimiter->isBlocked(
             $key,
             $this->config->rateLimitMaxAttempts,
             $this->config->rateLimitWindowSeconds,
         )) {
-            $errorKey = 'error.rate_limited';
-            $error = $uiContext
-                ? $this->uiError($lang ?? 'en', $errorKey)
-                : $this->adminError($lang, $errorKey);
+            return null;
+        }
 
-            return Response::json(['error' => $error], 429);
+        $errorKey = 'error.rate_limited';
+        $error = $uiContext
+            ? $this->uiError($lang ?? 'en', $errorKey)
+            : $this->adminError($lang, $errorKey);
+
+        return Response::json(['error' => $error], 429);
+    }
+
+    private function rateLimitRecordFailure(?string $clientIp): void
+    {
+        $key = $this->rateLimitKeyFromServer($clientIp);
+
+        if ($key === '') {
+            return;
         }
 
         $this->rateLimiter->recordAttempt($key, $this->config->rateLimitWindowSeconds);
-
-        return null;
     }
 }

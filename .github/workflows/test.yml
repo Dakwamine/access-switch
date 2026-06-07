@@ -40,8 +40,6 @@ jobs:
         env:
           ACCESS_SWITCH_TOKEN: ci-test-token
           DEFAULT_OPEN: "false"
-          # Smoke script issues 3 POST /admin; rate limit is covered by PHPUnit.
-          RATE_LIMIT_MAX_ATTEMPTS: "0"
         run: |
           sudo mkdir -p /data/states
           sudo chmod 777 /data /data/states

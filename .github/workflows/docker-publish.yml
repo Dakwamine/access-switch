@@ -26,7 +26,6 @@ jobs:
         env:
           ACCESS_SWITCH_TOKEN: ci-test-token
           DEFAULT_OPEN: "false"
-          RATE_LIMIT_MAX_ATTEMPTS: "0"
         run: |
           sudo mkdir -p /data/states
           sudo chmod 777 /data /data/states

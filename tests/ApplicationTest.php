@@ -496,4 +496,28 @@ final class ApplicationTest extends TestCase
         $this->assertSame(401, $app->handle('POST', '/ui/login', '{"token":"wrong"}', null, null, $ip)->status);
         $this->assertSame(429, $app->handle('POST', '/ui/login', '{"token":"test-secret"}', null, null, $ip)->status);
     }
+
+    public function testAdminBlocksValidBearerWhenRateLimited(): void
+    {
+        RateLimiter::reset($this->dataDir . '/.ratelimit');
+        $config = new Config('test-secret', false, [], false, 2_592_000, false, 'test-secret', 2, 60);
+        $app = $this->appFromConfig($config);
+        $ip = '10.0.0.11';
+
+        $this->assertSame(401, $app->handle('POST', '/admin', '{"open":true}', 'Bearer wrong', null, $ip)->status);
+        $this->assertSame(401, $app->handle('POST', '/admin', '{"open":true}', 'Bearer wrong', null, $ip)->status);
+        $this->assertSame(429, $app->handle('POST', '/admin', '{"open":true}', 'Bearer test-secret', null, $ip)->status);
+    }
+
+    public function testAdminValidRequestsNotCountedTowardRateLimit(): void
+    {
+        RateLimiter::reset($this->dataDir . '/.ratelimit');
+        $config = new Config('test-secret', false, [], false, 2_592_000, false, 'test-secret', 2, 60);
+        $app = $this->appFromConfig($config);
+        $ip = '10.0.0.10';
+
+        $this->assertSame(401, $app->handle('POST', '/admin', '{"open":true}', 'Bearer wrong', null, $ip)->status);
+        $this->assertSame(200, $app->handle('POST', '/admin', '{"open":true}', 'Bearer test-secret', null, $ip)->status);
+        $this->assertSame(200, $app->handle('POST', '/admin', '{"open":false}', 'Bearer test-secret', null, $ip)->status);
+    }
 }
