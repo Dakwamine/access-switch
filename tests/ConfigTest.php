@@ -81,6 +81,17 @@ final class ConfigTest extends TestCase
         $this->assertSame('ui-secret', $config->uiSessionSecret);
     }
 
+    public function testRateLimitZeroDisablesLimiting(): void
+    {
+        $this->setEnv('RATE_LIMIT_MAX_ATTEMPTS', '0');
+        $this->setEnv('RATE_LIMIT_WINDOW_SECONDS', '0');
+
+        $config = Config::fromEnvironment();
+
+        $this->assertSame(0, $config->rateLimitMaxAttempts);
+        $this->assertSame(0, $config->rateLimitWindowSeconds);
+    }
+
     private function setEnv(string $key, string $value): void
     {
         if (!array_key_exists($key, $this->saved)) {

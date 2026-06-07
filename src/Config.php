@@ -44,8 +44,8 @@ final class Config
         );
         $uiSecretRaw = getenv('ACCESS_SWITCH_UI_SECRET') ?: '';
         $uiSessionSecret = $uiSecretRaw !== '' ? $uiSecretRaw : $accessSwitchToken;
-        $rateLimitMaxAttempts = self::parsePositiveInt(getenv('RATE_LIMIT_MAX_ATTEMPTS') ?: '2', 2);
-        $rateLimitWindowSeconds = self::parsePositiveInt(getenv('RATE_LIMIT_WINDOW_SECONDS') ?: '60', 60);
+        $rateLimitMaxAttempts = self::parseNonNegativeInt(self::env('RATE_LIMIT_MAX_ATTEMPTS', '2'), 2);
+        $rateLimitWindowSeconds = self::parseNonNegativeInt(self::env('RATE_LIMIT_WINDOW_SECONDS', '60'), 60);
         $trustedProxies = self::parseList(getenv('TRUSTED_PROXIES') ?: '');
         $logClientIp = filter_var(
             getenv('LOG_CLIENT_IP') ?: 'false',
@@ -76,6 +76,23 @@ final class Config
         $value = (int) $raw;
 
         return $value > 0 ? $value : $default;
+    }
+
+    private static function env(string $key, string $default): string
+    {
+        $value = getenv($key);
+
+        return ($value === false || $value === '') ? $default : $value;
+    }
+
+    /** `0` is valid (disables rate limiting in {@see RateLimiter}). */
+    private static function parseNonNegativeInt(string $raw, int $default): int
+    {
+        if ($raw === '' || !ctype_digit($raw)) {
+            return $default;
+        }
+
+        return (int) $raw;
     }
 
     /**
