@@ -15,8 +15,8 @@ COPY resources ./resources
 COPY src ./src
 COPY Caddyfile /etc/caddy/Caddyfile
 RUN addgroup -g 1000 app && adduser -u 1000 -G app -D app \
-    && mkdir -p /data \
-    && chown -R app:app /app /data /etc/caddy
+    && mkdir -p /data /config/caddy \
+    && chown -R app:app /app /data /etc/caddy /config
 EXPOSE 8080
 ENV SERVER_NAME=:8080
 USER app

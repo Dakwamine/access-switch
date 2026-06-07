@@ -21,6 +21,7 @@ final class Config
         public readonly int $rateLimitMaxAttempts = 30,
         public readonly int $rateLimitWindowSeconds = 60,
         public readonly array $trustedProxies = [],
+        public readonly bool $logClientIp = false,
     ) {
     }
 
@@ -46,6 +47,10 @@ final class Config
         $rateLimitMaxAttempts = self::parsePositiveInt(getenv('RATE_LIMIT_MAX_ATTEMPTS') ?: '30', 30);
         $rateLimitWindowSeconds = self::parsePositiveInt(getenv('RATE_LIMIT_WINDOW_SECONDS') ?: '60', 60);
         $trustedProxies = self::parseList(getenv('TRUSTED_PROXIES') ?: '');
+        $logClientIp = filter_var(
+            getenv('LOG_CLIENT_IP') ?: 'false',
+            FILTER_VALIDATE_BOOLEAN
+        );
 
         return new self(
             $accessSwitchToken,
@@ -58,6 +63,7 @@ final class Config
             $rateLimitMaxAttempts,
             $rateLimitWindowSeconds,
             $trustedProxies,
+            $logClientIp,
         );
     }
 
