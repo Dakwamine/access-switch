@@ -13,6 +13,7 @@ services:
       AUTHORIZED_SERVICES: ${AUTHORIZED_SERVICES:-toto}
       DEFAULT_OPEN: "false"
       UI_ENABLED: ${UI_ENABLED:-false}
+      # When /ui is routed via Traefik: TRUSTED_PROXIES=172.16.0.0/12,10.0.0.0/8
     volumes:
       - access-switch-state:/data
   # optional explicit list (writable):

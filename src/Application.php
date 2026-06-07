@@ -378,7 +378,12 @@ final class Application
 
     private function rateLimitResponse(?string $clientIp, ?string $lang, bool $uiContext): ?Response
     {
-        $ip = $clientIp ?? ($_SERVER['REMOTE_ADDR'] ?? '');
+        $ip = $clientIp ?? ClientIp::resolve(
+            $_SERVER['REMOTE_ADDR'] ?? '',
+            $_SERVER['HTTP_X_FORWARDED_FOR'] ?? null,
+            $_SERVER['HTTP_X_REAL_IP'] ?? null,
+            $this->config->trustedProxies,
+        );
         if ($ip === '') {
             return null;
         }

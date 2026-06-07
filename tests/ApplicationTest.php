@@ -390,6 +390,47 @@ final class ApplicationTest extends TestCase
         $this->assertSame(401, $app->handle('POST', '/admin', '{"open":true}', 'Bearer wrong', null, $ip)->status);
     }
 
+    public function testRateLimitUsesXRealIpBehindTrustedProxy(): void
+    {
+        RateLimiter::reset();
+        $config = new Config(
+            'test-secret',
+            false,
+            [],
+            false,
+            2_592_000,
+            false,
+            'test-secret',
+            1,
+            60,
+            ['172.18.0.0/16'],
+        );
+        $app = $this->appFromConfig($config);
+
+        $saved = [
+            'REMOTE_ADDR' => $_SERVER['REMOTE_ADDR'] ?? null,
+            'HTTP_X_REAL_IP' => $_SERVER['HTTP_X_REAL_IP'] ?? null,
+        ];
+        $_SERVER['REMOTE_ADDR'] = '172.18.0.5';
+        $_SERVER['HTTP_X_REAL_IP'] = '203.0.113.50';
+
+        try {
+            $this->assertSame(401, $app->handle('POST', '/admin', '{"open":true}', 'Bearer wrong')->status);
+            $this->assertSame(429, $app->handle('POST', '/admin', '{"open":true}', 'Bearer wrong')->status);
+
+            $_SERVER['HTTP_X_REAL_IP'] = '203.0.113.51';
+            $this->assertSame(401, $app->handle('POST', '/admin', '{"open":true}', 'Bearer wrong')->status);
+        } finally {
+            foreach ($saved as $key => $value) {
+                if ($value === null) {
+                    unset($_SERVER[$key]);
+                } else {
+                    $_SERVER[$key] = $value;
+                }
+            }
+        }
+    }
+
     public function testUiSessionUsesDedicatedSecretWhenConfigured(): void
     {
         $config = new Config('api-secret', false, [], true, 2_592_000, false, 'ui-secret');

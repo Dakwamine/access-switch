@@ -8,6 +8,7 @@ final class Config
 {
     /**
      * @param list<string> $authorizedServices
+     * @param list<string>      $trustedProxies
      */
     public function __construct(
         public readonly string $accessSwitchToken,
@@ -19,6 +20,7 @@ final class Config
         public readonly string $uiSessionSecret = '',
         public readonly int $rateLimitMaxAttempts = 30,
         public readonly int $rateLimitWindowSeconds = 60,
+        public readonly array $trustedProxies = [],
     ) {
     }
 
@@ -43,6 +45,7 @@ final class Config
         $uiSessionSecret = $uiSecretRaw !== '' ? $uiSecretRaw : $accessSwitchToken;
         $rateLimitMaxAttempts = self::parsePositiveInt(getenv('RATE_LIMIT_MAX_ATTEMPTS') ?: '30', 30);
         $rateLimitWindowSeconds = self::parsePositiveInt(getenv('RATE_LIMIT_WINDOW_SECONDS') ?: '60', 60);
+        $trustedProxies = self::parseList(getenv('TRUSTED_PROXIES') ?: '');
 
         return new self(
             $accessSwitchToken,
@@ -54,6 +57,7 @@ final class Config
             $uiSessionSecret,
             $rateLimitMaxAttempts,
             $rateLimitWindowSeconds,
+            $trustedProxies,
         );
     }
 
@@ -73,18 +77,26 @@ final class Config
      */
     private static function parseAuthorizedServices(string $raw): array
     {
+        return self::parseList($raw);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function parseList(string $raw): array
+    {
         if ($raw === '') {
             return [];
         }
 
-        $services = [];
+        $items = [];
         foreach (explode(',', $raw) as $part) {
             $part = trim($part);
             if ($part !== '') {
-                $services[] = $part;
+                $items[] = $part;
             }
         }
 
-        return $services;
+        return $items;
     }
 }

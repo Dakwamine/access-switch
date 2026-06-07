@@ -32,6 +32,7 @@ final class ConfigTest extends TestCase
         $this->unsetEnv('ACCESS_SWITCH_UI_SECRET');
         $this->unsetEnv('RATE_LIMIT_MAX_ATTEMPTS');
         $this->unsetEnv('RATE_LIMIT_WINDOW_SECONDS');
+        $this->unsetEnv('TRUSTED_PROXIES');
 
         $config = Config::fromEnvironment();
 
