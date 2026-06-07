@@ -114,6 +114,8 @@ image: dakwamine/access-switch:2.0.0
 - **`UI_ENABLED=false`** by default; enable only when `/ui` is reachable on LAN/VPN.
 - `DEFAULT_OPEN=false` and a volume on `/data` (named volume or bind-mount; the entrypoint `chown`s `/data` to UID 1000 at start).
 
+The image overrides FrankenPHP’s default healthcheck (`localhost:2019/metrics`) with `GET /health` on port 8080, because `admin off` disables the Caddy admin API.
+
 See [SECURITY.md](../SECURITY.md).
 
 ## n8n

@@ -21,4 +21,7 @@ RUN addgroup -g 1000 app && adduser -u 1000 -G app -D app \
     && chmod +x /docker-entrypoint.sh
 EXPOSE 8080
 ENV SERVER_NAME=:8080
+# Override FrankenPHP default (curl localhost:2019/metrics) — incompatible with `admin off`.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+    CMD curl -f http://127.0.0.1:8080/health || exit 1
 ENTRYPOINT ["/docker-entrypoint.sh"]
