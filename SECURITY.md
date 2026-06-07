@@ -19,7 +19,7 @@ The optional UI (`UI_ENABLED=true`, default **false**) adds browser-based toggli
 1. **`ACCESS_SWITCH_TOKEN`** — long random secret; `.env` or secrets manager, never in Git. Optionally set **`ACCESS_SWITCH_UI_SECRET`** separately for UI session cookies (backward compatible: one secret still works for both).
 2. **Network** — keep `/admin` on the Docker internal network (or protected LAN).
 3. **`DEFAULT_OPEN=false`** — closed by default when no state file exists.
-4. **Volume `/data`** — restrict host permissions if needed. The container runs as UID **1000**; named Docker volumes work out of the box; bind-mounts must be writable by that user.
+4. **Volume `/data`** — the container entrypoint adjusts ownership of `/data` and `/config` at start (runs briefly as root, then UID **1000**). Bind-mounts owned by root on the host are supported.
 
 ## Failure behavior
 

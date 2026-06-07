@@ -86,6 +86,7 @@ final class Application
 
         try {
             $lang = $this->resolveUiLang($cookieHeader);
+            $this->logClientIpFromRequest(null, '/ui');
 
             return Response::html(UiPage::html($lang));
         } catch (Throwable) {
@@ -376,18 +377,25 @@ final class Application
         return UiLocale::get($lang, $key, $vars);
     }
 
-    private function logClientIp(
-        string $remoteAddr,
-        ?string $xForwardedFor,
-        ?string $xRealIp,
-        string $resolvedIp,
-    ): void {
+    private function logClientIpFromRequest(?string $clientIpOverride, string $path): void
+    {
         if (!$this->config->logClientIp) {
             return;
         }
 
+        $remoteAddr = $_SERVER['REMOTE_ADDR'] ?? '';
+        $xForwardedFor = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? null;
+        $xRealIp = $_SERVER['HTTP_X_REAL_IP'] ?? null;
+        $resolvedIp = $clientIpOverride ?? ClientIp::resolve(
+            $remoteAddr,
+            $xForwardedFor,
+            $xRealIp,
+            $this->config->trustedProxies,
+        );
+
         $line = sprintf(
-            'access-switch client-ip remote=%s x-real-ip=%s x-forwarded-for=%s resolved=%s',
+            'access-switch client-ip path=%s remote=%s x-real-ip=%s x-forwarded-for=%s resolved=%s',
+            $path,
             $remoteAddr !== '' ? $remoteAddr : '-',
             $xRealIp ?? '-',
             $xForwardedFor ?? '-',
@@ -408,7 +416,7 @@ final class Application
             $this->config->trustedProxies,
         );
 
-        $this->logClientIp($remoteAddr, $xForwardedFor, $xRealIp, $ip);
+        $this->logClientIpFromRequest($clientIp, $uiContext ? '/ui/login' : '/admin');
 
         if ($ip === '') {
             return null;
