@@ -9,6 +9,7 @@ use AccessSwitch\Config;
 use AccessSwitch\Paths;
 use AccessSwitch\ServiceRegistry;
 use AccessSwitch\ServiceStateStore;
+use AccessSwitch\UiSession;
 
 final class ApplicationTest extends TestCase
 {
@@ -262,16 +263,73 @@ final class ApplicationTest extends TestCase
         $this->assertSame(200, $app->handle('GET', '/health/')->status);
     }
 
+    public function testUiDisabledReturns404(): void
+    {
+        $app = $this->app(uiEnabled: false);
+        $this->assertSame(404, $app->handle('GET', '/ui')->status);
+        $this->assertSame(404, $app->handle('GET', '/admin/status')->status);
+        $this->assertSame(404, $app->handle('POST', '/ui/login', '{"token":"test-secret"}')->status);
+    }
+
+    public function testUiEnabledServesHtml(): void
+    {
+        $app = $this->app(uiEnabled: true);
+        $response = $app->handle('GET', '/ui');
+        $this->assertSame(200, $response->status);
+        $this->assertStringContainsString('text/html', $response->headers['Content-Type'] ?? '');
+        $this->assertStringContainsString('access-switch', $response->body);
+    }
+
+    public function testAdminStatusRequiresAuthWhenUiEnabled(): void
+    {
+        $app = $this->app(uiEnabled: true);
+        $this->assertSame(401, $app->handle('GET', '/admin/status')->status);
+    }
+
+    public function testUiLoginAndSessionAdminFlow(): void
+    {
+        $app = $this->app(uiEnabled: true);
+        $login = $app->handle('POST', '/ui/login', '{"token":"test-secret"}');
+        $this->assertSame(200, $login->status);
+        $this->assertArrayHasKey('Set-Cookie', $login->headers);
+        $cookie = $login->headers['Set-Cookie'];
+
+        $status = $app->handle('GET', '/admin/status', null, null, $cookie);
+        $this->assertSame(200, $status->status);
+        $data = $this->decodeJsonResponse($status);
+        $this->assertArrayHasKey('services', $data);
+        $this->assertNotEmpty($data['services']);
+
+        $toggle = $app->handle('POST', '/admin', '{"open":true}', null, $cookie);
+        $this->assertSame(200, $toggle->status);
+        $this->assertSame(200, $app->handle('GET', '/check')->status);
+
+        $logout = $app->handle('POST', '/ui/logout');
+        $this->assertSame(200, $logout->status);
+        $this->assertStringContainsString('Max-Age=0', $logout->headers['Set-Cookie'] ?? '');
+    }
+
+    public function testUiLoginRejectsInvalidToken(): void
+    {
+        $app = $this->app(uiEnabled: true);
+        $response = $app->handle('POST', '/ui/login', '{"token":"wrong"}');
+        $this->assertSame(401, $response->status);
+    }
+
     /**
      * @param list<string> $authorizedServices
      */
-    private function app(string $token = 'test-secret', array $authorizedServices = []): Application
-    {
-        $config = new Config($token, false, $authorizedServices);
+    private function app(
+        string $token = 'test-secret',
+        array $authorizedServices = [],
+        bool $uiEnabled = false,
+    ): Application {
+        $config = new Config($token, false, $authorizedServices, $uiEnabled);
         $paths = new Paths($this->dataDir);
         $registry = ServiceRegistry::fromConfig($config, $paths);
         $store = new ServiceStateStore($paths, $config->defaultOpen);
+        $uiSession = new UiSession($token, 3600, false);
 
-        return new Application($config, $registry, $store);
+        return new Application($config, $registry, $store, $uiSession);
     }
 }

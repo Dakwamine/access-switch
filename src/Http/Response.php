@@ -38,4 +38,31 @@ final class Response
     {
         return new self($status);
     }
+
+    /** @param array<string, string> $extraHeaders */
+    public static function html(string $body, int $status = 200, array $extraHeaders = []): self
+    {
+        return new self(
+            $status,
+            $body,
+            array_merge(
+                [
+                    'Content-Type' => 'text/html; charset=utf-8',
+                    'Cache-Control' => 'no-store',
+                    'X-Frame-Options' => 'DENY',
+                ],
+                $extraHeaders
+            )
+        );
+    }
+
+    /** @param array<string, string> $extraHeaders */
+    public static function jsonWithHeaders(mixed $data, int $status, array $extraHeaders): self
+    {
+        return new self(
+            $status,
+            (string) json_encode($data, JSON_THROW_ON_ERROR),
+            array_merge(['Content-Type' => 'application/json; charset=utf-8'], $extraHeaders)
+        );
+    }
 }

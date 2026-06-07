@@ -85,6 +85,80 @@ curl -sS -X POST http://access-switch:8080/admin \
   -d '{"service": "toto", "open": true}'
 ```
 
+## Admin UI
+
+Optional web interface to list and toggle services. **Disabled by default** (`UI_ENABLED=false`).
+
+### Enable
+
+Set in environment:
+
+```yaml
+UI_ENABLED: "true"
+```
+
+When disabled, `GET /ui`, `GET /admin/status`, `POST /ui/login`, and `POST /ui/logout` return **404** (routes hidden).
+
+### Exposure
+
+Expose the UI **only on LAN or VPN** (Traefik internal entrypoint, private hostname, IP allowlist). Do not publish `/ui` on the public Internet.
+
+Example Traefik router (LAN hostname, no public DNS):
+
+```yaml
+- traefik.http.routers.access-switch-ui.rule=Host(`switch.home.lan`)
+- traefik.http.routers.access-switch-ui.entrypoints=lan
+- traefik.http.routers.access-switch-ui.service=access-switch-ui
+- traefik.http.services.access-switch-ui.loadbalancer.server.port=8080
+```
+
+### `GET /ui`
+
+Serves a minimal HTML page (list + toggle buttons). No auth required to load the page; actions require login.
+
+| Code | Situation |
+|------|-----------|
+| 200 | HTML page |
+| 404 | `UI_ENABLED=false` |
+
+### `GET /admin/status`
+
+Returns open/closed state for all authorized services.
+
+**Authentication:** same as `POST /admin` — `Authorization: Bearer <token>` **or** valid UI session cookie (after `POST /ui/login`).
+
+| Code | Body |
+|------|------|
+| 200 | `{"services":[{"service":"…","open":bool,"updated_at":"ISO8601\|null"},…]}` |
+| 401 | Missing or invalid auth |
+| 404 | `UI_ENABLED=false` |
+
+### `POST /ui/login`
+
+Body (JSON):
+
+```json
+{ "token": "<ACCESS_SWITCH_TOKEN>" }
+```
+
+On success, sets an `HttpOnly` session cookie (`access_switch_ui`). The browser can then call `/admin/status` and `/admin` without resending the Bearer header.
+
+| Code | Situation |
+|------|-----------|
+| 200 | Cookie set |
+| 401 | Invalid token |
+| 404 | `UI_ENABLED=false` |
+| 503 | `ACCESS_SWITCH_TOKEN` not configured |
+
+### `POST /ui/logout`
+
+Clears the UI session cookie in the browser. Stateless sessions remain valid until expiry if the cookie value was copied elsewhere.
+
+| Code | Situation |
+|------|-----------|
+| 200 | Cookie cleared |
+| 404 | `UI_ENABLED=false` |
+
 ## Persistence
 
 State is stored under fixed paths inside the container (mount a volume on `/data`):
@@ -136,7 +210,7 @@ Optional JSON array (writable volume — not read-only):
 ["toto", "autre-app"]
 ```
 
-Bind-mount or persist on the `/data` volume. A future management UI may edit this file.
+Bind-mount or persist on the `/data` volume.
 
 ## Environment variables
 
@@ -145,5 +219,8 @@ Bind-mount or persist on the `/data` volume. A future management UI may edit thi
 | `ACCESS_SWITCH_TOKEN` | *(empty)* | Admin secret; if empty, `/admin` returns 503 |
 | `DEFAULT_OPEN` | `false` | State when the file does not exist yet |
 | `AUTHORIZED_SERVICES` | *(empty)* | Additional restriction: comma-separated ids; when set, only listed services are allowed |
+| `UI_ENABLED` | `false` | Enable `/ui` and related routes; expose only on LAN/VPN |
+| `UI_SESSION_TTL` | `2592000` | UI session cookie lifetime (seconds) |
+| `UI_COOKIE_SECURE` | `false` | Add `Secure` flag to UI cookie (HTTPS) |
 
 See also [deployment.md](deployment.md).

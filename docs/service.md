@@ -10,6 +10,10 @@ HTTP service to open or close public access to one or more sites without stoppin
 | `GET /check/{serviceId}` | Visitor authorization for a named service |
 | `POST /admin` | ON/OFF toggle per service (Bearer `ACCESS_SWITCH_TOKEN`) |
 | `GET /health` | Healthcheck |
+| `GET /ui` | Admin web UI (requires `UI_ENABLED=true`) |
+| `GET /admin/status` | List services and states (UI / admin auth) |
+| `POST /ui/login` | UI session login |
+| `POST /ui/logout` | Clear UI session cookie |
 
 Full reference: [api.md](api.md).
 
@@ -34,6 +38,9 @@ docker build -t dakwamine/access-switch:local .
 | `ACCESS_SWITCH_TOKEN` | — | Admin API secret (required in production) |
 | `DEFAULT_OPEN` | `false` | State when the state file does not exist |
 | `AUTHORIZED_SERVICES` | *(empty)* | Optional extra restriction (CSV); when set, only listed ids are allowed |
+| `UI_ENABLED` | `false` | Serve `/ui` and UI admin routes; keep **false** unless exposed on LAN/VPN only |
+| `UI_SESSION_TTL` | `2592000` | UI session cookie lifetime in seconds (30 days) |
+| `UI_COOKIE_SECURE` | `false` | Set `Secure` on UI cookie (use `true` behind HTTPS) |
 
 Fixed paths inside the container (mount a volume on `/data`):
 

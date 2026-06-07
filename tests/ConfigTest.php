@@ -28,12 +28,14 @@ final class ConfigTest extends TestCase
         $this->unsetEnv('ACCESS_SWITCH_TOKEN');
         $this->unsetEnv('DEFAULT_OPEN');
         $this->unsetEnv('AUTHORIZED_SERVICES');
+        $this->unsetEnv('UI_ENABLED');
 
         $config = Config::fromEnvironment();
 
         $this->assertSame('', $config->accessSwitchToken);
         $this->assertFalse($config->defaultOpen);
         $this->assertSame([], $config->authorizedServices);
+        $this->assertFalse($config->uiEnabled);
     }
 
     public function testFromEnvironmentReadsVariables(): void
@@ -41,12 +43,14 @@ final class ConfigTest extends TestCase
         $this->setEnv('ACCESS_SWITCH_TOKEN', 'secret');
         $this->setEnv('DEFAULT_OPEN', 'true');
         $this->setEnv('AUTHORIZED_SERVICES', 'toto, autre');
+        $this->setEnv('UI_ENABLED', 'true');
 
         $config = Config::fromEnvironment();
 
         $this->assertSame('secret', $config->accessSwitchToken);
         $this->assertTrue($config->defaultOpen);
         $this->assertSame(['toto', 'autre'], $config->authorizedServices);
+        $this->assertTrue($config->uiEnabled);
     }
 
     private function setEnv(string $key, string $value): void

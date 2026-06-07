@@ -11,6 +11,7 @@ WORKDIR /app
 COPY --from=vendor /app/vendor ./vendor
 COPY composer.json ./
 COPY public ./public
+COPY resources ./resources
 COPY src ./src
 COPY Caddyfile /etc/caddy/Caddyfile
 RUN mkdir -p /data

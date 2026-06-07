@@ -12,6 +12,7 @@ services:
       ACCESS_SWITCH_TOKEN: ${ACCESS_SWITCH_TOKEN:?set ACCESS_SWITCH_TOKEN}
       AUTHORIZED_SERVICES: ${AUTHORIZED_SERVICES:-toto}
       DEFAULT_OPEN: "false"
+      UI_ENABLED: ${UI_ENABLED:-false}
     volumes:
       - access-switch-state:/data
   # optional explicit list (writable):

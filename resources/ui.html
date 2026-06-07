@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>access-switch</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: system-ui, sans-serif;
+      line-height: 1.4;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 32rem;
+      padding: 1rem;
+    }
+    h1 {
+      font-size: 1.25rem;
+      margin: 0 0 1rem;
+    }
+    .card {
+      border: 1px solid #8884;
+      border-radius: 0.5rem;
+      padding: 1rem;
+      margin-bottom: 0.75rem;
+    }
+    .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+    .name {
+      font-weight: 600;
+      word-break: break-all;
+    }
+    .meta {
+      font-size: 0.85rem;
+      opacity: 0.75;
+      margin-top: 0.25rem;
+    }
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .badge.open { background: #2ecc4022; color: #1e7a28; }
+    .badge.closed { background: #e74c3c22; color: #a82315; }
+    button, input[type=password] {
+      font: inherit;
+      padding: 0.55rem 0.9rem;
+      border-radius: 0.4rem;
+      border: 1px solid #8886;
+    }
+    button {
+      cursor: pointer;
+      min-width: 5.5rem;
+    }
+    button.primary { background: #2563eb; color: #fff; border-color: #2563eb; }
+    button.danger { background: #dc2626; color: #fff; border-color: #dc2626; }
+    button:disabled { opacity: 0.5; cursor: wait; }
+    form label { display: block; margin-bottom: 0.35rem; font-size: 0.9rem; }
+    form input { width: 100%; box-sizing: border-box; margin-bottom: 0.75rem; }
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+    .error { color: #dc2626; font-size: 0.9rem; margin-top: 0.5rem; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <section id="login-view">
+    <h1>access-switch</h1>
+    <form id="login-form">
+      <label for="token">Token admin</label>
+      <input id="token" type="password" autocomplete="current-password" required>
+      <button type="submit" class="primary">Connexion</button>
+      <p id="login-error" class="error hidden"></p>
+    </form>
+  </section>
+
+  <section id="app-view" class="hidden">
+    <div class="toolbar">
+      <h1>access-switch</h1>
+      <button type="button" id="logout">Déconnexion</button>
+    </div>
+    <div id="services"></div>
+    <p id="app-error" class="error hidden"></p>
+  </section>
+
+  <script>
+    const loginView = document.getElementById('login-view');
+    const appView = document.getElementById('app-view');
+    const servicesEl = document.getElementById('services');
+    const loginError = document.getElementById('login-error');
+    const appError = document.getElementById('app-error');
+
+    async function api(path, options = {}) {
+      const response = await fetch(path, {
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+        ...options,
+      });
+      let data = null;
+      const text = await response.text();
+      if (text) {
+        try { data = JSON.parse(text); } catch (_) { data = { raw: text }; }
+      }
+      return { response, data };
+    }
+
+    function showLogin(message) {
+      loginView.classList.remove('hidden');
+      appView.classList.add('hidden');
+      if (message) {
+        loginError.textContent = message;
+        loginError.classList.remove('hidden');
+      } else {
+        loginError.classList.add('hidden');
+      }
+    }
+
+    function showApp() {
+      loginView.classList.add('hidden');
+      appView.classList.remove('hidden');
+      appError.classList.add('hidden');
+    }
+
+    function formatUpdatedAt(value) {
+      if (!value) return 'jamais modifié';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return value;
+      return 'modifié ' + date.toLocaleString();
+    }
+
+    function renderServices(services) {
+      servicesEl.innerHTML = '';
+      if (!services.length) {
+        servicesEl.innerHTML = '<p>Aucun service configuré.</p>';
+        return;
+      }
+      for (const item of services) {
+        const card = document.createElement('div');
+        card.className = 'card';
+        const open = !!item.open;
+        card.innerHTML = `
+          <div class="row">
+            <div>
+              <div class="name">${item.service}</div>
+              <div class="meta">${formatUpdatedAt(item.updated_at)}</div>
+            </div>
+            <span class="badge ${open ? 'open' : 'closed'}">${open ? 'Ouvert' : 'Fermé'}</span>
+          </div>
+        `;
+        const row = document.createElement('div');
+        row.className = 'row';
+        row.style.marginTop = '0.75rem';
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = open ? 'Fermer' : 'Ouvrir';
+        btn.className = open ? 'danger' : 'primary';
+        btn.addEventListener('click', () => toggleService(item.service, !open, btn));
+        row.appendChild(document.createElement('div'));
+        row.lastElementChild.appendChild(btn);
+        card.appendChild(row);
+        servicesEl.appendChild(card);
+      }
+    }
+
+    async function loadStatus() {
+      const { response, data } = await api('/admin/status');
+      if (response.status === 401) {
+        showLogin();
+        return false;
+      }
+      if (!response.ok) {
+        appError.textContent = (data && data.error) || 'Impossible de charger les services.';
+        appError.classList.remove('hidden');
+        return false;
+      }
+      renderServices((data && data.services) || []);
+      showApp();
+      return true;
+    }
+
+    async function toggleService(service, open, button) {
+      button.disabled = true;
+      appError.classList.add('hidden');
+      const { response, data } = await api('/admin', {
+        method: 'POST',
+        body: JSON.stringify({ service, open }),
+      });
+      if (response.status === 401) {
+        showLogin('Session expirée.');
+        return;
+      }
+      if (!response.ok) {
+        appError.textContent = (data && data.error) || 'Échec du basculement.';
+        appError.classList.remove('hidden');
+        button.disabled = false;
+        return;
+      }
+      await loadStatus();
+    }
+
+    document.getElementById('login-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      loginError.classList.add('hidden');
+      const token = document.getElementById('token').value;
+      const { response, data } = await api('/ui/login', {
+        method: 'POST',
+        body: JSON.stringify({ token }),
+      });
+      if (!response.ok) {
+        loginError.textContent = (data && data.error) || 'Connexion refusée.';
+        loginError.classList.remove('hidden');
+        return;
+      }
+      document.getElementById('token').value = '';
+      await loadStatus();
+    });
+
+    document.getElementById('logout').addEventListener('click', async () => {
+      await api('/ui/logout', { method: 'POST', body: '{}' });
+      showLogin();
+    });
+
+    loadStatus();
+  </script>
+</body>
+</html>

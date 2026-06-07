@@ -13,6 +13,9 @@ final class Config
         public readonly string $accessSwitchToken,
         public readonly bool $defaultOpen,
         public readonly array $authorizedServices = [],
+        public readonly bool $uiEnabled = false,
+        public readonly int $uiSessionTtl = 2_592_000,
+        public readonly bool $uiCookieSecure = false,
     ) {
     }
 
@@ -24,8 +27,35 @@ final class Config
             FILTER_VALIDATE_BOOLEAN
         );
         $authorizedServices = self::parseAuthorizedServices(getenv('AUTHORIZED_SERVICES') ?: '');
+        $uiEnabled = filter_var(
+            getenv('UI_ENABLED') ?: 'false',
+            FILTER_VALIDATE_BOOLEAN
+        );
+        $uiSessionTtl = self::parsePositiveInt(getenv('UI_SESSION_TTL') ?: '2592000', 2_592_000);
+        $uiCookieSecure = filter_var(
+            getenv('UI_COOKIE_SECURE') ?: 'false',
+            FILTER_VALIDATE_BOOLEAN
+        );
 
-        return new self($accessSwitchToken, $defaultOpen, $authorizedServices);
+        return new self(
+            $accessSwitchToken,
+            $defaultOpen,
+            $authorizedServices,
+            $uiEnabled,
+            $uiSessionTtl,
+            $uiCookieSecure,
+        );
+    }
+
+    private static function parsePositiveInt(string $raw, int $default): int
+    {
+        if ($raw === '' || !ctype_digit($raw)) {
+            return $default;
+        }
+
+        $value = (int) $raw;
+
+        return $value > 0 ? $value : $default;
     }
 
     /**

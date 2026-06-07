@@ -25,6 +25,19 @@ final class ServiceStateStore
         $store->setOpen($open);
     }
 
+    /** @return array{open: bool, updated_at: string|null} */
+    public function getState(string $serviceId): array
+    {
+        $store = new StateStore($this->readPath($serviceId), $this->defaultOpen);
+        $state = $store->read();
+        $updatedAt = $state['updated_at'] ?? null;
+
+        return [
+            'open' => (bool) ($state['open'] ?? $this->defaultOpen),
+            'updated_at' => is_string($updatedAt) ? $updatedAt : null,
+        ];
+    }
+
     private function readPath(string $serviceId): string
     {
         if ($serviceId === ServiceRegistry::DEFAULT_SERVICE_ID) {

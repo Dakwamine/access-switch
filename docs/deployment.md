@@ -111,6 +111,7 @@ image: dakwamine/access-switch:2.0.0
 
 - Do not expose `POST /admin` on the public Internet without extra controls.
 - Prefer the admin API on the internal Docker network only.
+- **`UI_ENABLED=false`** by default; enable only when `/ui` is reachable on LAN/VPN.
 - `DEFAULT_OPEN=false` and a named volume on `/data`.
 
 See [SECURITY.md](../SECURITY.md).
