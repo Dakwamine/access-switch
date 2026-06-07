@@ -20,8 +20,13 @@
         }
     },
     "scripts": {
-        "test": "phpunit -c phpunit.xml.dist",
-        "test:coverage": "phpunit -c phpunit.coverage.xml.dist"
+        "test": "@php vendor/bin/phpunit -c phpunit.xml.dist",
+        "test:coverage": "@php vendor/bin/phpunit -c phpunit.coverage.xml.dist",
+        "test:api": "bash scripts/test-api.sh",
+        "test:all": [
+            "@test",
+            "@test:api"
+        ]
     },
     "config": {
         "sort-packages": true

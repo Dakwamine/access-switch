@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="{{LANG}}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -49,7 +49,7 @@
     }
     .badge.open { background: #2ecc4022; color: #1e7a28; }
     .badge.closed { background: #e74c3c22; color: #a82315; }
-    button, input[type=password] {
+    button, input[type=password], select {
       font: inherit;
       padding: 0.55rem 0.9rem;
       border-radius: 0.4rem;
@@ -68,7 +68,23 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 0.75rem;
       margin-bottom: 1rem;
+    }
+    .toolbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .lang-select label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      border: 0;
     }
     .error { color: #dc2626; font-size: 0.9rem; margin-top: 0.5rem; }
     .hidden { display: none !important; }
@@ -76,11 +92,17 @@
 </head>
 <body>
   <section id="login-view">
-    <h1>access-switch</h1>
+    <div class="toolbar">
+      <h1>access-switch</h1>
+      <div class="lang-select">
+        <label for="lang-login" data-i18n="lang.label"></label>
+        <select id="lang-login" aria-label="Language">{{LANG_OPTIONS}}</select>
+      </div>
+    </div>
     <form id="login-form">
-      <label for="token">Token admin</label>
+      <label for="token" data-i18n="login.label"></label>
       <input id="token" type="password" autocomplete="current-password" required>
-      <button type="submit" class="primary">Connexion</button>
+      <button type="submit" class="primary" data-i18n="login.submit"></button>
       <p id="login-error" class="error hidden"></p>
     </form>
   </section>
@@ -88,18 +110,44 @@
   <section id="app-view" class="hidden">
     <div class="toolbar">
       <h1>access-switch</h1>
-      <button type="button" id="logout">Déconnexion</button>
+      <div class="toolbar-actions">
+        <div class="lang-select">
+          <label for="lang-app" data-i18n="lang.label"></label>
+          <select id="lang-app" aria-label="Language">{{LANG_OPTIONS}}</select>
+        </div>
+        <button type="button" id="logout" data-i18n="logout"></button>
+      </div>
     </div>
     <div id="services"></div>
     <p id="app-error" class="error hidden"></p>
   </section>
 
   <script>
+    const LANG = '{{LANG}}';
+    const LOCALE = '{{LOCALE}}';
+    const I18N = {{I18N}};
+
     const loginView = document.getElementById('login-view');
     const appView = document.getElementById('app-view');
     const servicesEl = document.getElementById('services');
     const loginError = document.getElementById('login-error');
     const appError = document.getElementById('app-error');
+    const langLogin = document.getElementById('lang-login');
+    const langApp = document.getElementById('lang-app');
+
+    function t(key, vars = {}) {
+      let text = I18N[key] || key;
+      for (const [name, value] of Object.entries(vars)) {
+        text = text.replace('{' + name + '}', value);
+      }
+      return text;
+    }
+
+    function applyI18n() {
+      document.querySelectorAll('[data-i18n]').forEach((el) => {
+        el.textContent = t(el.dataset.i18n);
+      });
+    }
 
     async function api(path, options = {}) {
       const response = await fetch(path, {
@@ -133,16 +181,16 @@
     }
 
     function formatUpdatedAt(value) {
-      if (!value) return 'jamais modifié';
+      if (!value) return t('updated.never');
       const date = new Date(value);
       if (Number.isNaN(date.getTime())) return value;
-      return 'modifié ' + date.toLocaleString();
+      return t('updated.at', { date: date.toLocaleString(LOCALE) });
     }
 
     function renderServices(services) {
       servicesEl.innerHTML = '';
       if (!services.length) {
-        servicesEl.innerHTML = '<p>Aucun service configuré.</p>';
+        servicesEl.innerHTML = '<p>' + t('services.empty') + '</p>';
         return;
       }
       for (const item of services) {
@@ -155,7 +203,7 @@
               <div class="name">${item.service}</div>
               <div class="meta">${formatUpdatedAt(item.updated_at)}</div>
             </div>
-            <span class="badge ${open ? 'open' : 'closed'}">${open ? 'Ouvert' : 'Fermé'}</span>
+            <span class="badge ${open ? 'open' : 'closed'}">${open ? t('badge.open') : t('badge.closed')}</span>
           </div>
         `;
         const row = document.createElement('div');
@@ -163,7 +211,7 @@
         row.style.marginTop = '0.75rem';
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.textContent = open ? 'Fermer' : 'Ouvrir';
+        btn.textContent = open ? t('action.close') : t('action.open');
         btn.className = open ? 'danger' : 'primary';
         btn.addEventListener('click', () => toggleService(item.service, !open, btn));
         row.appendChild(document.createElement('div'));
@@ -180,7 +228,7 @@
         return false;
       }
       if (!response.ok) {
-        appError.textContent = (data && data.error) || 'Impossible de charger les services.';
+        appError.textContent = (data && data.error) || '';
         appError.classList.remove('hidden');
         return false;
       }
@@ -197,16 +245,27 @@
         body: JSON.stringify({ service, open }),
       });
       if (response.status === 401) {
-        showLogin('Session expirée.');
+        showLogin(data && data.error ? data.error : '');
         return;
       }
       if (!response.ok) {
-        appError.textContent = (data && data.error) || 'Échec du basculement.';
+        appError.textContent = (data && data.error) || '';
         appError.classList.remove('hidden');
         button.disabled = false;
         return;
       }
       await loadStatus();
+    }
+
+    async function setLanguage(lang) {
+      if (lang === LANG) return;
+      const { response } = await api('/ui/lang', {
+        method: 'POST',
+        body: JSON.stringify({ lang }),
+      });
+      if (response.ok) {
+        location.reload();
+      }
     }
 
     document.getElementById('login-form').addEventListener('submit', async (event) => {
@@ -218,7 +277,7 @@
         body: JSON.stringify({ token }),
       });
       if (!response.ok) {
-        loginError.textContent = (data && data.error) || 'Connexion refusée.';
+        loginError.textContent = (data && data.error) || '';
         loginError.classList.remove('hidden');
         return;
       }
@@ -231,6 +290,10 @@
       showLogin();
     });
 
+    langLogin.addEventListener('change', () => setLanguage(langLogin.value));
+    langApp.addEventListener('change', () => setLanguage(langApp.value));
+
+    applyI18n();
     loadStatus();
   </script>
 </body>

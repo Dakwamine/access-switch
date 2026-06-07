@@ -23,7 +23,8 @@ Configuration: `.ddev/config.yaml` at the repository root.
 ddev start
 ddev composer install
 ddev exec composer test
-./scripts/test-api.sh
+ddev exec composer test:api
+# or both: ddev exec composer test:all
 ```
 
 - App URL: `https://access-switch.ddev.site`

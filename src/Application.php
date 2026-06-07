@@ -53,7 +53,7 @@ final class Application
 
         return match ($path) {
             '/health' => Response::json(['status' => 'ok']),
-            '/ui' => $this->uiPage(),
+            '/ui' => $this->uiPage($cookieHeader),
             '/admin/status' => $this->adminStatus($authorizationHeader, $cookieHeader),
             default => Response::empty(404),
         };
@@ -67,22 +67,27 @@ final class Application
     ): Response {
         return match ($path) {
             '/admin' => $this->admin($body, $authorizationHeader, $cookieHeader),
-            '/ui/login' => $this->uiLogin($body),
+            '/ui/login' => $this->uiLogin($body, $cookieHeader),
             '/ui/logout' => $this->uiLogout(),
+            '/ui/lang' => $this->uiSetLang($body),
             default => Response::empty(404),
         };
     }
 
-    private function uiPage(): Response
+    private function uiPage(?string $cookieHeader): Response
     {
         if (!$this->config->uiEnabled) {
             return Response::empty(404);
         }
 
         try {
-            return Response::html(UiPage::html());
+            $lang = $this->resolveUiLang($cookieHeader);
+
+            return Response::html(UiPage::html($lang));
         } catch (Throwable) {
-            return Response::json(['error' => 'UI unavailable'], 503);
+            $lang = $this->resolveUiLang($cookieHeader);
+
+            return Response::json(['error' => $this->uiError($lang, 'error.ui_unavailable')], 503);
         }
     }
 
@@ -92,8 +97,10 @@ final class Application
             return Response::empty(404);
         }
 
+        $lang = $this->resolveUiLang($cookieHeader);
+
         if (!$this->isAdminAuthorized($authorizationHeader, $cookieHeader)) {
-            return Response::json(['error' => 'unauthorized'], 401);
+            return Response::json(['error' => $this->uiError($lang, 'error.unauthorized')], 401);
         }
 
         $services = [];
@@ -105,7 +112,13 @@ final class Application
             try {
                 $state = $this->store->getState($serviceId);
             } catch (Throwable) {
-                return Response::json(['error' => 'state read failed', 'service' => $serviceId], 503);
+                return Response::json(
+                    [
+                        'error' => $this->uiError($lang, 'error.state_read_failed', ['service' => $serviceId]),
+                        'service' => $serviceId,
+                    ],
+                    503
+                );
             }
 
             $services[] = [
@@ -118,36 +131,38 @@ final class Application
         return Response::json(['services' => $services]);
     }
 
-    private function uiLogin(?string $body): Response
+    private function uiLogin(?string $body, ?string $cookieHeader): Response
     {
         if (!$this->config->uiEnabled) {
             return Response::empty(404);
         }
 
+        $lang = $this->resolveUiLang($cookieHeader);
+
         if ($this->config->accessSwitchToken === '') {
             return Response::json(
-                ['error' => 'ACCESS_SWITCH_TOKEN not configured'],
+                ['error' => $this->uiError($lang, 'error.token_not_configured')],
                 503
             );
         }
 
         $body ??= file_get_contents('php://input');
         if ($body === false || $body === '') {
-            return Response::json(['error' => 'JSON body required'], 400);
+            return Response::json(['error' => $this->uiError($lang, 'error.json_body_required')], 400);
         }
 
         try {
             $data = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
         } catch (Throwable) {
-            return Response::json(['error' => 'invalid JSON'], 400);
+            return Response::json(['error' => $this->uiError($lang, 'error.invalid_json')], 400);
         }
 
         if (!is_array($data) || !array_key_exists('token', $data) || !is_string($data['token'])) {
-            return Response::json(['error' => '"token" field required (string)'], 400);
+            return Response::json(['error' => $this->uiError($lang, 'error.token_field_required')], 400);
         }
 
         if (!hash_equals($this->config->accessSwitchToken, $data['token'])) {
-            return Response::json(['error' => 'unauthorized'], 401);
+            return Response::json(['error' => $this->uiError($lang, 'error.login_denied')], 401);
         }
 
         $sessionValue = $this->uiSession->createValue();
@@ -172,6 +187,40 @@ final class Application
         );
     }
 
+    private function uiSetLang(?string $body): Response
+    {
+        if (!$this->config->uiEnabled) {
+            return Response::empty(404);
+        }
+
+        $lang = $this->resolveUiLang(null);
+
+        $body ??= file_get_contents('php://input');
+        if ($body === false || $body === '') {
+            return Response::json(['error' => $this->uiError($lang, 'error.json_body_required')], 400);
+        }
+
+        try {
+            $data = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
+        } catch (Throwable) {
+            return Response::json(['error' => $this->uiError($lang, 'error.invalid_json')], 400);
+        }
+
+        if (!is_array($data) || !array_key_exists('lang', $data) || !is_string($data['lang'])) {
+            return Response::json(['error' => $this->uiError($lang, 'error.invalid_lang')], 400);
+        }
+
+        if (!UiLocale::isSupported($data['lang'])) {
+            return Response::json(['error' => $this->uiError($lang, 'error.invalid_lang')], 400);
+        }
+
+        return Response::jsonWithHeaders(
+            ['ok' => true],
+            200,
+            UiLocale::setCookieHeaders($data['lang'], $this->config->uiCookieSecure)
+        );
+    }
+
     private function check(string $serviceId): Response
     {
         if (!$this->registry->validateServiceId($serviceId) || !$this->registry->isAuthorizedForCheck($serviceId)) {
@@ -191,57 +240,63 @@ final class Application
 
     private function admin(?string $body, ?string $authorizationHeader, ?string $cookieHeader): Response
     {
+        $lang = $this->adminErrorLang($cookieHeader);
+
         if ($this->config->accessSwitchToken === '') {
             return Response::json(
-                ['error' => 'ACCESS_SWITCH_TOKEN not configured'],
+                ['error' => $this->adminError($lang, 'error.token_not_configured')],
                 503
             );
         }
 
         if (!$this->isAdminAuthorized($authorizationHeader, $cookieHeader)) {
-            return Response::json(['error' => 'unauthorized'], 401);
+            $key = UiLocale::extractFromCookie($cookieHeader) !== null
+                ? 'error.session_expired'
+                : 'error.unauthorized';
+
+            return Response::json(['error' => $this->adminError($lang, $key)], 401);
         }
 
         $body ??= file_get_contents('php://input');
         if ($body === false || $body === '') {
-            return Response::json(['error' => 'JSON body required'], 400);
+            return Response::json(['error' => $this->adminError($lang, 'error.json_body_required')], 400);
         }
 
         try {
             $data = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
         } catch (Throwable) {
-            return Response::json(['error' => 'invalid JSON'], 400);
+            return Response::json(['error' => $this->adminError($lang, 'error.invalid_json')], 400);
         }
 
         if (!is_array($data) || !array_key_exists('open', $data)) {
-            return Response::json(['error' => '"open" field required (boolean)'], 400);
+            return Response::json(['error' => $this->adminError($lang, 'error.open_field_required')], 400);
         }
 
         if (!is_bool($data['open'])) {
-            return Response::json(['error' => '"open" must be a boolean'], 400);
+            return Response::json(['error' => $this->adminError($lang, 'error.open_must_be_boolean')], 400);
         }
 
         $serviceId = ServiceRegistry::DEFAULT_SERVICE_ID;
         if (array_key_exists('service', $data)) {
             if (!is_string($data['service'])) {
-                return Response::json(['error' => '"service" must be a string'], 400);
+                return Response::json(['error' => $this->adminError($lang, 'error.service_must_be_string')], 400);
             }
             $serviceId = $data['service'];
         }
 
         if (!$this->registry->validateServiceId($serviceId)) {
-            return Response::json(['error' => 'invalid service id'], 400);
+            return Response::json(['error' => $this->adminError($lang, 'error.invalid_service_id')], 400);
         }
 
         if (!$this->registry->isAuthorizedForAdmin($serviceId)) {
-            return Response::json(['error' => 'unknown or unauthorized service'], 400);
+            return Response::json(['error' => $this->adminError($lang, 'error.unknown_service')], 400);
         }
 
         try {
             $this->store->setOpen($serviceId, $data['open']);
         } catch (Throwable $e) {
             return Response::json(
-                ['error' => 'persistence failed', 'detail' => $e->getMessage()],
+                ['error' => $this->adminError($lang, 'error.persistence_failed'), 'detail' => $e->getMessage()],
                 500
             );
         }
@@ -276,5 +331,36 @@ final class Application
         }
 
         return hash_equals($this->config->accessSwitchToken, $matches[1]);
+    }
+
+    private function resolveUiLang(?string $cookieHeader): string
+    {
+        $cookie = $cookieHeader ?? ($_SERVER['HTTP_COOKIE'] ?? '');
+        $acceptLanguage = $_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? null;
+
+        return UiLocale::resolve($cookie !== '' ? $cookie : null, $acceptLanguage);
+    }
+
+    private function adminErrorLang(?string $cookieHeader): ?string
+    {
+        $cookie = $cookieHeader ?? ($_SERVER['HTTP_COOKIE'] ?? '');
+
+        return UiLocale::extractFromCookie($cookie !== '' ? $cookie : null);
+    }
+
+    /** @param array<string, string|int> $vars */
+    private function uiError(string $lang, string $key, array $vars = []): string
+    {
+        return UiLocale::get($lang, $key, $vars);
+    }
+
+    /** @param array<string, string|int> $vars */
+    private function adminError(?string $lang, string $key, array $vars = []): string
+    {
+        if ($lang === null) {
+            return UiLocale::get('en', $key, $vars);
+        }
+
+        return UiLocale::get($lang, $key, $vars);
     }
 }

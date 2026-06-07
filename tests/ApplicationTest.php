@@ -278,6 +278,40 @@ final class ApplicationTest extends TestCase
         $this->assertSame(200, $response->status);
         $this->assertStringContainsString('text/html', $response->headers['Content-Type'] ?? '');
         $this->assertStringContainsString('access-switch', $response->body);
+        $this->assertStringContainsString('Connexion', $response->body);
+    }
+
+    public function testUiServesSelectedLanguage(): void
+    {
+        $app = $this->app(uiEnabled: true);
+        $cookie = 'access_switch_lang=en';
+        $response = $app->handle('GET', '/ui', null, null, $cookie);
+        $this->assertSame(200, $response->status);
+        $this->assertStringContainsString('Sign in', $response->body);
+        $this->assertStringContainsString('lang="en"', $response->body);
+    }
+
+    public function testUiSetLangSetsCookie(): void
+    {
+        $app = $this->app(uiEnabled: true);
+        $response = $app->handle('POST', '/ui/lang', '{"lang":"es"}');
+        $this->assertSame(200, $response->status);
+        $this->assertStringContainsString('access_switch_lang=es', $response->headers['Set-Cookie'] ?? '');
+    }
+
+    public function testUiLoginErrorIsLocalized(): void
+    {
+        $app = $this->app(uiEnabled: true);
+        $response = $app->handle(
+            'POST',
+            '/ui/login',
+            '{"token":"wrong"}',
+            null,
+            'access_switch_lang=fr'
+        );
+        $this->assertSame(401, $response->status);
+        $data = $this->decodeJsonResponse($response);
+        $this->assertSame('Connexion refusée.', $data['error']);
     }
 
     public function testAdminStatusRequiresAuthWhenUiEnabled(): void
