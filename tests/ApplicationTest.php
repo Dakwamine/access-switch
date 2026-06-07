@@ -7,8 +7,7 @@ namespace AccessSwitch\Tests;
 use AccessSwitch\Application;
 use AccessSwitch\Config;
 use AccessSwitch\Paths;
-use AccessSwitch\ServiceRegistry;
-use AccessSwitch\ServiceStateStore;
+use AccessSwitch\ServiceManager;
 use AccessSwitch\RateLimiter;
 use AccessSwitch\UiSession;
 
@@ -161,7 +160,7 @@ final class ApplicationTest extends TestCase
     public function testUnsupportedMethodReturns405(): void
     {
         $app = $this->app();
-        $this->assertSame(405, $app->handle('DELETE', '/check')->status);
+        $this->assertSame(405, $app->handle('PATCH', '/check')->status);
     }
 
     public function testAdminRequiresTokenConfigured(): void
@@ -464,13 +463,12 @@ final class ApplicationTest extends TestCase
     private function appFromConfig(Config $config): Application
     {
         $paths = new Paths($this->dataDir);
-        $registry = ServiceRegistry::fromConfig($config, $paths);
-        $store = new ServiceStateStore($paths, $config->defaultOpen);
+        $services = ServiceManager::fromConfig($config, $paths);
         $uiSession = new UiSession($config->uiSessionSecret, 3600, false);
 
         $rateLimiter = new RateLimiter($paths->rateLimitDir());
 
-        return new Application($config, $registry, $store, $uiSession, $rateLimiter);
+        return new Application($config, $services, $uiSession, $rateLimiter);
     }
 
     public function testRateLimitFileStoreSharedAcrossInstances(): void
@@ -507,6 +505,108 @@ final class ApplicationTest extends TestCase
         $this->assertSame(401, $app->handle('POST', '/admin', '{"open":true}', 'Bearer wrong', null, $ip)->status);
         $this->assertSame(401, $app->handle('POST', '/admin', '{"open":true}', 'Bearer wrong', null, $ip)->status);
         $this->assertSame(429, $app->handle('POST', '/admin', '{"open":true}', 'Bearer test-secret', null, $ip)->status);
+    }
+
+    public function testAdminAddServiceCreatesServicesJsonWhenFileExists(): void
+    {
+        file_put_contents($this->dataDir . '/services.json', json_encode(['toto']));
+
+        $app = $this->app();
+        $response = $app->handle('POST', '/admin', '{"service":"autre","open":false}', 'Bearer test-secret');
+        $this->assertSame(200, $response->status);
+        $this->assertSame(['toto', 'autre'], json_decode(file_get_contents($this->dataDir . '/services.json'), true));
+
+        $app2 = $this->app();
+        $open = $app2->handle('POST', '/admin', '{"service":"autre","open":true}', 'Bearer test-secret');
+        $this->assertSame(200, $open->status);
+        $this->assertSame(200, $app2->handle('GET', '/check/autre')->status);
+    }
+
+    public function testAdminAddServiceRejectsServiceNotInEnv(): void
+    {
+        file_put_contents($this->dataDir . '/services.json', json_encode(['toto']));
+        $app = $this->app(authorizedServices: ['toto']);
+        $response = $app->handle('POST', '/admin', '{"service":"autre","open":false}', 'Bearer test-secret');
+        $this->assertSame(400, $response->status);
+        $this->assertStringContainsString('AUTHORIZED_SERVICES', $response->body);
+    }
+
+    public function testAdminRejectsOpenOnUnlistedServiceWhenServicesJsonExists(): void
+    {
+        file_put_contents($this->dataDir . '/services.json', json_encode(['toto']));
+        $app = $this->app();
+
+        $response = $app->handle('POST', '/admin', '{"service":"autre","open":true}', 'Bearer test-secret');
+        $this->assertSame(400, $response->status);
+        $this->assertStringContainsString('unknown or unauthorized service', $response->body);
+    }
+
+    public function testAdminDeleteRemovesStateFileWithoutServicesJson(): void
+    {
+        file_put_contents($this->dataDir . '/states/toto.json', json_encode(['open' => true]));
+        $app = $this->app();
+
+        $response = $app->handle('POST', '/admin', '{"service":"toto","delete":true}', 'Bearer test-secret');
+        $this->assertSame(200, $response->status);
+        $this->assertFileDoesNotExist($this->dataDir . '/states/toto.json');
+    }
+
+    public function testAdminStatusRemovableWhenStateFileOrListed(): void
+    {
+        file_put_contents($this->dataDir . '/states/toto.json', json_encode(['open' => true]));
+        $app = $this->app(uiEnabled: true);
+        $login = $app->handle('POST', '/ui/login', '{"token":"test-secret"}');
+        $cookie = $login->headers['Set-Cookie'];
+
+        $status = $this->decodeJsonResponse($app->handle('GET', '/admin/status', null, null, $cookie));
+        $toto = array_values(array_filter($status['services'], static fn (array $s): bool => $s['service'] === 'toto'))[0];
+        $this->assertTrue($toto['removable']);
+
+        file_put_contents($this->dataDir . '/services.json', json_encode(['toto']));
+        $app2 = $this->app(uiEnabled: true);
+        $login2 = $app2->handle('POST', '/ui/login', '{"token":"test-secret"}');
+        $cookie2 = $login2->headers['Set-Cookie'];
+
+        $status2 = $this->decodeJsonResponse($app2->handle('GET', '/admin/status', null, null, $cookie2));
+        $toto2 = array_values(array_filter($status2['services'], static fn (array $s): bool => $s['service'] === 'toto'))[0];
+        $this->assertTrue($toto2['removable']);
+    }
+
+    public function testAdminDeleteServiceRemovesFromFileAndState(): void
+    {
+        file_put_contents($this->dataDir . '/services.json', json_encode(['toto', 'autre']));
+        file_put_contents($this->dataDir . '/states/toto.json', json_encode(['open' => true]));
+        $app = $this->app();
+
+        $response = $app->handle('POST', '/admin', '{"service":"toto","delete":true}', 'Bearer test-secret');
+        $this->assertSame(200, $response->status);
+        $data = $this->decodeJsonResponse($response);
+        $this->assertTrue($data['deleted']);
+        $this->assertSame(['autre'], json_decode(file_get_contents($this->dataDir . '/services.json'), true));
+        $this->assertFileDoesNotExist($this->dataDir . '/states/toto.json');
+    }
+
+    public function testAdminCannotDeleteDefaultService(): void
+    {
+        $app = $this->app();
+        $response = $app->handle('POST', '/admin', '{"service":"default","delete":true}', 'Bearer test-secret');
+        $this->assertSame(400, $response->status);
+    }
+
+    public function testAdminDeleteServiceRequiresAuth(): void
+    {
+        $app = $this->app();
+        $this->assertSame(401, $app->handle('POST', '/admin', '{"service":"toto","delete":true}')->status);
+    }
+
+    public function testAdminDeleteServiceWorksWhenUiDisabled(): void
+    {
+        file_put_contents($this->dataDir . '/services.json', json_encode(['toto']));
+        $app = $this->app(uiEnabled: false);
+
+        $response = $app->handle('POST', '/admin', '{"service":"toto","delete":true}', 'Bearer test-secret');
+        $this->assertSame(200, $response->status);
+        $this->assertSame([], json_decode(file_get_contents($this->dataDir . '/services.json'), true));
     }
 
     public function testAdminValidRequestsNotCountedTowardRateLimit(): void

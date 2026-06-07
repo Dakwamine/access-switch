@@ -2,7 +2,7 @@
 
 ## Threat model
 
-**access-switch** controls whether Traefik forwards traffic to your application. It is not end-user authentication. `POST /admin` is a **global switch**: anyone with `ACCESS_SWITCH_TOKEN` can open or close public access.
+**access-switch** controls whether Traefik forwards traffic to your application. It is not end-user authentication. `POST /admin` is a **global switch**: anyone with `ACCESS_SWITCH_TOKEN` can open or close public access, and (when `/data/services.json` exists) register or remove service ids in that whitelist.
 
 ## Admin UI (`UI_ENABLED`)
 

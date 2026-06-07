@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace AccessSwitch\Tests;
 
-use AccessSwitch\StateStore;
+use AccessSwitch\JsonFile;
 use RuntimeException;
 
-final class StateStoreTest extends TestCase
+final class JsonFileTest extends TestCase
 {
     private string $path;
 
@@ -30,33 +30,24 @@ final class StateStoreTest extends TestCase
 
     public function testDefaultsWhenFileMissing(): void
     {
-        $store = new StateStore($this->path, false);
-        $this->assertFalse($store->isOpen());
-        $this->assertSame(['open' => false], $store->read());
+        $state = JsonFile::read($this->path, ['open' => false]);
+        $this->assertSame(['open' => false], $state);
     }
 
-    public function testDefaultOpenWhenFileMissing(): void
+    public function testWriteAndRead(): void
     {
-        $store = new StateStore($this->path, true);
-        $this->assertTrue($store->isOpen());
-    }
+        JsonFile::write($this->path, ['open' => true, 'updated_at' => '2026-01-01T00:00:00+00:00']);
 
-    public function testSetAndReadOpen(): void
-    {
-        $store = new StateStore($this->path, false);
-        $store->setOpen(true);
-        $this->assertTrue($store->isOpen());
-
-        $state = $store->read();
+        $state = JsonFile::read($this->path, ['open' => false]);
         $this->assertTrue($state['open']);
-        $this->assertArrayHasKey('updated_at', $state);
+        $this->assertSame('2026-01-01T00:00:00+00:00', $state['updated_at']);
     }
 
     public function testInvalidJsonFallsBackToDefault(): void
     {
         file_put_contents($this->path, 'not-json');
-        $store = new StateStore($this->path, false);
-        $this->assertFalse($store->isOpen());
+        $state = JsonFile::read($this->path, ['open' => false]);
+        $this->assertFalse($state['open']);
     }
 
     public function testThrowsWhenFileUnreadable(): void
@@ -64,10 +55,8 @@ final class StateStoreTest extends TestCase
         file_put_contents($this->path, '{"open":true}');
         chmod($this->path, 0000);
 
-        $store = new StateStore($this->path, false);
-
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('Cannot read state file');
-        $store->read();
+        $this->expectExceptionMessage('Cannot read file');
+        JsonFile::read($this->path, ['open' => false]);
     }
 }

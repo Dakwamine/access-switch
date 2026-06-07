@@ -12,18 +12,12 @@
     }
     body {
       margin: 0 auto;
-      max-width: 32rem;
+      max-width: 52rem;
       padding: 1rem;
     }
     h1 {
       font-size: 1.25rem;
       margin: 0 0 1rem;
-    }
-    .card {
-      border: 1px solid #8884;
-      border-radius: 0.5rem;
-      padding: 1rem;
-      margin-bottom: 0.75rem;
     }
     .row {
       display: flex;
@@ -31,25 +25,17 @@
       justify-content: space-between;
       gap: 0.75rem;
     }
-    .name {
-      font-weight: 600;
-      word-break: break-all;
-    }
-    .meta {
-      font-size: 0.85rem;
-      opacity: 0.75;
-      margin-top: 0.25rem;
-    }
     .badge {
       display: inline-block;
       padding: 0.15rem 0.5rem;
       border-radius: 999px;
       font-size: 0.8rem;
       font-weight: 600;
+      white-space: nowrap;
     }
     .badge.open { background: #2ecc4022; color: #1e7a28; }
     .badge.closed { background: #e74c3c22; color: #a82315; }
-    button, input[type=password], select {
+    button, input[type=password], input[type=text], select {
       font: inherit;
       padding: 0.55rem 0.9rem;
       border-radius: 0.4rem;
@@ -59,11 +45,20 @@
       cursor: pointer;
       min-width: 5.5rem;
     }
+    button.sm {
+      min-width: auto;
+      padding: 0.4rem 0.65rem;
+      font-size: 0.85rem;
+    }
     button.primary { background: #2563eb; color: #fff; border-color: #2563eb; }
     button.danger { background: #dc2626; color: #fff; border-color: #dc2626; }
+    button.ghost {
+      background: transparent;
+      color: inherit;
+    }
     button:disabled { opacity: 0.5; cursor: wait; }
     form label { display: block; margin-bottom: 0.35rem; font-size: 0.9rem; }
-    form input { width: 100%; box-sizing: border-box; margin-bottom: 0.75rem; }
+    form input { box-sizing: border-box; }
     .toolbar {
       display: flex;
       justify-content: space-between;
@@ -88,6 +83,63 @@
     }
     .error { color: #dc2626; font-size: 0.9rem; margin-top: 0.5rem; }
     .hidden { display: none !important; }
+    .add-form {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+    .add-form input[type=text] {
+      flex: 1 1 12rem;
+      min-width: 0;
+    }
+    .services-table-wrap {
+      overflow-x: auto;
+      border: 1px solid #8884;
+      border-radius: 0.5rem;
+    }
+    table.services {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.95rem;
+    }
+    table.services th,
+    table.services td {
+      padding: 0.65rem 0.75rem;
+      text-align: left;
+      border-bottom: 1px solid #8883;
+      vertical-align: middle;
+    }
+    table.services th {
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      opacity: 0.75;
+      background: #8881;
+    }
+    table.services tr:last-child td {
+      border-bottom: none;
+    }
+    table.services .service-id {
+      font-weight: 600;
+      word-break: break-all;
+    }
+    table.services .meta {
+      font-size: 0.85rem;
+      opacity: 0.75;
+    }
+    table.services .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      justify-content: flex-end;
+    }
+    .empty-state {
+      padding: 1.25rem;
+      text-align: center;
+      opacity: 0.8;
+    }
   </style>
 </head>
 <body>
@@ -118,6 +170,11 @@
         <button type="button" id="logout" data-i18n="logout"></button>
       </div>
     </div>
+    <form id="add-form" class="add-form">
+      <input id="new-service" type="text" pattern="[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}" required
+             data-i18n-placeholder="add.placeholder" autocomplete="off" spellcheck="false">
+      <button type="submit" class="primary" data-i18n="action.add"></button>
+    </form>
     <div id="services"></div>
     <p id="app-error" class="error hidden"></p>
   </section>
@@ -143,9 +200,20 @@
       return text;
     }
 
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
     function applyI18n() {
       document.querySelectorAll('[data-i18n]').forEach((el) => {
         el.textContent = t(el.dataset.i18n);
+      });
+      document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+        el.placeholder = t(el.dataset.i18nPlaceholder);
       });
     }
 
@@ -190,35 +258,75 @@
     function renderServices(services) {
       servicesEl.innerHTML = '';
       if (!services.length) {
-        servicesEl.innerHTML = '<p>' + t('services.empty') + '</p>';
+        servicesEl.innerHTML = '<p class="empty-state">' + escapeHtml(t('services.empty')) + '</p>';
         return;
       }
+
+      const table = document.createElement('table');
+      table.className = 'services';
+      table.innerHTML = `
+        <thead>
+          <tr>
+            <th scope="col">${escapeHtml(t('table.service'))}</th>
+            <th scope="col">${escapeHtml(t('table.status'))}</th>
+            <th scope="col">${escapeHtml(t('table.updated'))}</th>
+            <th scope="col">${escapeHtml(t('table.actions'))}</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      `;
+      const tbody = table.querySelector('tbody');
+
       for (const item of services) {
-        const card = document.createElement('div');
-        card.className = 'card';
         const open = !!item.open;
-        card.innerHTML = `
-          <div class="row">
-            <div>
-              <div class="name">${item.service}</div>
-              <div class="meta">${formatUpdatedAt(item.updated_at)}</div>
-            </div>
-            <span class="badge ${open ? 'open' : 'closed'}">${open ? t('badge.open') : t('badge.closed')}</span>
-          </div>
-        `;
-        const row = document.createElement('div');
-        row.className = 'row';
-        row.style.marginTop = '0.75rem';
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.textContent = open ? t('action.close') : t('action.open');
-        btn.className = open ? 'danger' : 'primary';
-        btn.addEventListener('click', () => toggleService(item.service, !open, btn));
-        row.appendChild(document.createElement('div'));
-        row.lastElementChild.appendChild(btn);
-        card.appendChild(row);
-        servicesEl.appendChild(card);
+        const tr = document.createElement('tr');
+
+        const nameCell = document.createElement('td');
+        nameCell.className = 'service-id';
+        nameCell.textContent = item.service;
+        tr.appendChild(nameCell);
+
+        const statusCell = document.createElement('td');
+        const badge = document.createElement('span');
+        badge.className = 'badge ' + (open ? 'open' : 'closed');
+        badge.textContent = open ? t('badge.open') : t('badge.closed');
+        statusCell.appendChild(badge);
+        tr.appendChild(statusCell);
+
+        const updatedCell = document.createElement('td');
+        updatedCell.className = 'meta';
+        updatedCell.textContent = formatUpdatedAt(item.updated_at);
+        tr.appendChild(updatedCell);
+
+        const actionsCell = document.createElement('td');
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+
+        const toggleBtn = document.createElement('button');
+        toggleBtn.type = 'button';
+        toggleBtn.className = (open ? 'danger' : 'primary') + ' sm';
+        toggleBtn.textContent = open ? t('action.close') : t('action.open');
+        toggleBtn.addEventListener('click', () => toggleService(item.service, !open, toggleBtn));
+        actions.appendChild(toggleBtn);
+
+        if (item.removable) {
+          const deleteBtn = document.createElement('button');
+          deleteBtn.type = 'button';
+          deleteBtn.className = 'ghost sm';
+          deleteBtn.textContent = t('action.delete');
+          deleteBtn.addEventListener('click', () => removeService(item.service, deleteBtn));
+          actions.appendChild(deleteBtn);
+        }
+
+        actionsCell.appendChild(actions);
+        tr.appendChild(actionsCell);
+        tbody.appendChild(tr);
       }
+
+      const wrap = document.createElement('div');
+      wrap.className = 'services-table-wrap';
+      wrap.appendChild(table);
+      servicesEl.appendChild(wrap);
     }
 
     async function loadStatus() {
@@ -243,6 +351,50 @@
       const { response, data } = await api('/admin', {
         method: 'POST',
         body: JSON.stringify({ service, open }),
+      });
+      if (response.status === 401) {
+        showLogin(data && data.error ? data.error : '');
+        return;
+      }
+      if (!response.ok) {
+        appError.textContent = (data && data.error) || '';
+        appError.classList.remove('hidden');
+        button.disabled = false;
+        return;
+      }
+      await loadStatus();
+    }
+
+    async function addService(service, button) {
+      button.disabled = true;
+      appError.classList.add('hidden');
+      const { response, data } = await api('/admin', {
+        method: 'POST',
+        body: JSON.stringify({ service, open: false }),
+      });
+      if (response.status === 401) {
+        showLogin(data && data.error ? data.error : '');
+        return;
+      }
+      if (!response.ok) {
+        appError.textContent = (data && data.error) || '';
+        appError.classList.remove('hidden');
+        button.disabled = false;
+        return;
+      }
+      document.getElementById('new-service').value = '';
+      await loadStatus();
+    }
+
+    async function removeService(service, button) {
+      if (!confirm(t('confirm.delete', { service }))) {
+        return;
+      }
+      button.disabled = true;
+      appError.classList.add('hidden');
+      const { response, data } = await api('/admin', {
+        method: 'POST',
+        body: JSON.stringify({ service, delete: true }),
       });
       if (response.status === 401) {
         showLogin(data && data.error ? data.error : '');
@@ -283,6 +435,13 @@
       }
       document.getElementById('token').value = '';
       await loadStatus();
+    });
+
+    document.getElementById('add-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const input = document.getElementById('new-service');
+      const button = event.submitter || event.target.querySelector('button[type=submit]');
+      await addService(input.value.trim(), button);
     });
 
     document.getElementById('logout').addEventListener('click', async () => {

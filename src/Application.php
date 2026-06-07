@@ -11,8 +11,7 @@ final class Application
 {
     public function __construct(
         private readonly Config $config,
-        private readonly ServiceRegistry $registry,
-        private readonly ServiceStateStore $store,
+        private readonly ServiceManager $services,
         private readonly UiSession $uiSession,
         private readonly RateLimiter $rateLimiter = new RateLimiter(),
     ) {
@@ -47,7 +46,7 @@ final class Application
         ?string $cookieHeader,
     ): Response {
         if ($path === '/check') {
-            return $this->check(ServiceRegistry::DEFAULT_SERVICE_ID);
+            return $this->check(ServiceManager::DEFAULT_SERVICE_ID);
         }
 
         if (preg_match('#^/check/([^/]+)$#', $path, $matches) === 1) {
@@ -109,13 +108,13 @@ final class Application
         }
 
         $services = [];
-        foreach ($this->registry->all() as $serviceId) {
-            if (!$this->registry->isAuthorizedForAdmin($serviceId)) {
+        foreach ($this->services->all() as $serviceId) {
+            if (!$this->services->isAuthorizedForAdmin($serviceId)) {
                 continue;
             }
 
             try {
-                $state = $this->store->getState($serviceId);
+                $state = $this->services->getState($serviceId);
             } catch (Throwable) {
                 return Response::json(
                     [
@@ -130,6 +129,7 @@ final class Application
                 'service' => $serviceId,
                 'open' => $state['open'],
                 'updated_at' => $state['updated_at'],
+                'removable' => $this->services->canRemove($serviceId),
             ];
         }
 
@@ -235,12 +235,12 @@ final class Application
 
     private function check(string $serviceId): Response
     {
-        if (!$this->registry->validateServiceId($serviceId) || !$this->registry->isAuthorizedForCheck($serviceId)) {
+        if (!$this->services->validateServiceId($serviceId) || !$this->services->isAuthorizedForCheck($serviceId)) {
             return Response::empty(503);
         }
 
         try {
-            if ($this->store->isOpen($serviceId)) {
+            if ($this->services->isOpen($serviceId)) {
                 return Response::empty(200);
             }
         } catch (Throwable) {
@@ -250,9 +250,25 @@ final class Application
         return Response::empty(503);
     }
 
+    /**
+     * POST /admin — authenticated service management (Bearer token, or UI session when enabled).
+     *
+     * Two actions (body fields are mutually exclusive for delete):
+     *
+     * 1. Edit (create if missing) — `{"open": bool, "service"?: string}`
+     *    Sets the open/closed state for a service. Creates the service when it does not exist yet:
+     *    - discovery mode (no services.json, no AUTHORIZED_SERVICES): state file only;
+     *    - services.json mode: id must be registered closed first (`open: false`), then opened;
+     *      respects AUTHORIZED_SERVICES when set.
+     *
+     * 2. Delete — `{"delete": true, "service": string}`
+     *    Removes the id from services.json when listed, and deletes /data/states/{service}.json.
+     */
     private function admin(?string $body, ?string $authorizationHeader, ?string $cookieHeader, ?string $clientIp): Response
     {
         $lang = $this->adminErrorLang($cookieHeader);
+
+        // --- Preconditions: token configured, rate limit, caller authenticated ---
         $this->logClientIpFromRequest($clientIp, '/admin', $this->rateLimitKeyFromServer($clientIp));
 
         if ($this->config->accessSwitchToken === '') {
@@ -276,6 +292,73 @@ final class Application
             return Response::json(['error' => $this->adminError($lang, $key)], 401);
         }
 
+        // --- Parse and validate request body ---
+        $data = $this->parseAdminJsonBody($body, $lang);
+        if ($data instanceof Response) {
+            return $data;
+        }
+
+        $serviceId = $this->parseAdminServiceId($data, $lang);
+        if ($serviceId instanceof Response) {
+            return $serviceId;
+        }
+
+        if (!$this->services->validateServiceId($serviceId)) {
+            return Response::json(['error' => $this->adminError($lang, 'error.invalid_service_id')], 400);
+        }
+
+        // --- Action: delete (services.json only) ---
+        if (array_key_exists('delete', $data)) {
+            if (!is_bool($data['delete'])) {
+                return Response::json(['error' => $this->adminError($lang, 'error.delete_must_be_boolean')], 400);
+            }
+
+            if ($data['delete']) {
+                try {
+                    $this->services->remove($serviceId);
+                } catch (ServiceException $e) {
+                    return Response::json(['error' => $this->mapServiceException($lang, $e)], 400);
+                } catch (Throwable $e) {
+                    return Response::json(
+                        ['error' => $this->adminError($lang, 'error.persistence_failed'), 'detail' => $e->getMessage()],
+                        500,
+                    );
+                }
+
+                return Response::json(['service' => $serviceId, 'deleted' => true]);
+            }
+        }
+
+        // --- Action: edit / create (open state) ---
+        if (!array_key_exists('open', $data)) {
+            return Response::json(['error' => $this->adminError($lang, 'error.open_field_required')], 400);
+        }
+
+        if (!is_bool($data['open'])) {
+            return Response::json(['error' => $this->adminError($lang, 'error.open_must_be_boolean')], 400);
+        }
+
+        try {
+            $this->services->setOpen($serviceId, $data['open']);
+        } catch (ServiceException $e) {
+            return Response::json(['error' => $this->mapServiceException($lang, $e)], 400);
+        } catch (Throwable $e) {
+            return Response::json(
+                ['error' => $this->adminError($lang, 'error.persistence_failed'), 'detail' => $e->getMessage()],
+                500,
+            );
+        }
+
+        return Response::json([
+            'service' => $serviceId,
+            'open' => $data['open'],
+            'updated_at' => gmdate('c'),
+        ]);
+    }
+
+    /** @return array<string, mixed>|Response */
+    private function parseAdminJsonBody(?string $body, ?string $lang): array|Response
+    {
         $body ??= file_get_contents('php://input');
         if ($body === false || $body === '') {
             return Response::json(['error' => $this->adminError($lang, 'error.json_body_required')], 400);
@@ -287,15 +370,17 @@ final class Application
             return Response::json(['error' => $this->adminError($lang, 'error.invalid_json')], 400);
         }
 
-        if (!is_array($data) || !array_key_exists('open', $data)) {
-            return Response::json(['error' => $this->adminError($lang, 'error.open_field_required')], 400);
+        if (!is_array($data)) {
+            return Response::json(['error' => $this->adminError($lang, 'error.invalid_json')], 400);
         }
 
-        if (!is_bool($data['open'])) {
-            return Response::json(['error' => $this->adminError($lang, 'error.open_must_be_boolean')], 400);
-        }
+        return $data;
+    }
 
-        $serviceId = ServiceRegistry::DEFAULT_SERVICE_ID;
+    /** @param array<string, mixed> $data */
+    private function parseAdminServiceId(array $data, ?string $lang): string|Response
+    {
+        $serviceId = ServiceManager::DEFAULT_SERVICE_ID;
         if (array_key_exists('service', $data)) {
             if (!is_string($data['service'])) {
                 return Response::json(['error' => $this->adminError($lang, 'error.service_must_be_string')], 400);
@@ -303,28 +388,20 @@ final class Application
             $serviceId = $data['service'];
         }
 
-        if (!$this->registry->validateServiceId($serviceId)) {
-            return Response::json(['error' => $this->adminError($lang, 'error.invalid_service_id')], 400);
-        }
+        return $serviceId;
+    }
 
-        if (!$this->registry->isAuthorizedForAdmin($serviceId)) {
-            return Response::json(['error' => $this->adminError($lang, 'error.unknown_service')], 400);
-        }
-
-        try {
-            $this->store->setOpen($serviceId, $data['open']);
-        } catch (Throwable $e) {
-            return Response::json(
-                ['error' => $this->adminError($lang, 'error.persistence_failed'), 'detail' => $e->getMessage()],
-                500
-            );
-        }
-
-        return Response::json([
-            'service' => $serviceId,
-            'open' => $data['open'],
-            'updated_at' => gmdate('c'),
-        ]);
+    private function mapServiceException(?string $lang, ServiceException $e): string
+    {
+        return match ($e->reason) {
+            ServiceException::ALREADY_EXISTS => $this->adminError($lang, 'error.service_already_exists'),
+            ServiceException::NOT_FOUND => $this->adminError($lang, 'error.service_not_found'),
+            ServiceException::CANNOT_MANAGE_DEFAULT => $this->adminError($lang, 'error.cannot_manage_default'),
+            ServiceException::INVALID_ID => $this->adminError($lang, 'error.invalid_service_id'),
+            ServiceException::NOT_IN_ENV => $this->adminError($lang, 'error.service_not_in_env'),
+            ServiceException::UNKNOWN => $this->adminError($lang, 'error.unknown_service'),
+            default => $this->adminError($lang, 'error.persistence_failed'),
+        };
     }
 
     private function isAdminAuthorized(?string $authorizationHeader, ?string $cookieHeader): bool

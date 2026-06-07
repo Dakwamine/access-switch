@@ -58,13 +58,16 @@ Constant-time comparison (`hash_equals`). Token set via the `ACCESS_SWITCH_TOKEN
 |-------|------|-------------|
 | `open` | boolean | `true` = public access allowed, `false` = closed |
 | `service` | string (optional) | Service id; defaults to `default` |
+| `delete` | boolean (optional) | `true` = remove the service from `services.json` when listed, and delete `/data/states/{service}.json` (`open` not required) |
+
+When `/data/services.json` exists, a service id **not yet listed** can only be **registered** with `"open": false` (appends to the file, closed state). `"open": true` on an unknown id is rejected — register closed first, then open.
 
 ### Responses
 
 | Code | Situation |
 |------|-----------|
-| 200 | State saved; body `{"service":"…","open":bool,"updated_at":"ISO8601"}` |
-| 400 | Invalid JSON, missing / non-boolean `open`, invalid or unauthorized `service` |
+| 200 | State saved; body `{"service":"…","open":bool,"updated_at":"ISO8601"}` — or service removed: `{"service":"…","deleted":true}` |
+| 400 | Invalid JSON, missing / non-boolean `open`, invalid or unauthorized `service`, invalid `delete` |
 | 401 | Missing or invalid token |
 | 429 | Too many failed auth attempts from the same client IP |
 | 503 | `ACCESS_SWITCH_TOKEN` not configured on the server |
@@ -84,6 +87,18 @@ curl -sS -X POST http://access-switch:8080/admin \
   -H "Authorization: Bearer $ACCESS_SWITCH_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"service": "toto", "open": true}'
+
+# Register a new service (closed) — also appends to services.json when that file exists
+curl -sS -X POST http://access-switch:8080/admin \
+  -H "Authorization: Bearer $ACCESS_SWITCH_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"service": "toto", "open": false}'
+
+# Remove a service from services.json
+curl -sS -X POST http://access-switch:8080/admin \
+  -H "Authorization: Bearer $ACCESS_SWITCH_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"service": "toto", "delete": true}'
 ```
 
 ## Admin UI
